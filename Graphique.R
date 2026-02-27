@@ -5,7 +5,16 @@ library(scales)
 library(ggraph)
 source("fonctions_V3.R")
 
+###Graphe pluvio
 
+par(mfrow = c(1, 2))
+barplot(tapply(pluvio$RR,as.factor(pluvio$an),FUN = "sum"),main="Precipitation")
+barplot(tapply(pluvio$P_ETP,as.factor(pluvio$an),FUN = "sum"),main="Bilan P-ETP")
+
+head(pluvio)
+
+
+####Graphe chane d'etangs
 df_tous_les_etangs <- bind_rows(liste_etangs)
 
 # On lance le super-graphique à facettes !

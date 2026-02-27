@@ -3,11 +3,13 @@ library(zoo)
 library(igraph)
 library(scales) 
 library(ggraph)
+library(readxl)
+
 source("fonctions_V3.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "CHALAMONT"
+SITE_CHOISI <- "MARLIEUX"
 
 # Chargement et nettoyage initial
 # Utilisation de dplyr pour renommer et filtrer en une étape
@@ -62,7 +64,12 @@ etg$Vmax = etg$SURFACE_SI * Prof * 10000
 
 tab_etg <- cnetg %>%
   rename(NOM = Etang) %>% # On renomme pour la jointure
-  inner_join(etg, by = "NOM") 
+  inner_join(etg, by = "NOM") %>% select(-Vidange)
+
+
+
+Vidange_peche <- read_excel("data.xlsx")
+head(Vidange_peche)
 
 
 # Nettoyage
@@ -140,11 +147,7 @@ pluvio <- meteo %>%
     )
 }
 
-par(mfrow = c(1, 2))
-barplot(tapply(pluvio$RR,as.factor(pluvio$an),FUN = "sum"),main="Precipitation")
-barplot(tapply(pluvio$P_ETP,as.factor(pluvio$an),FUN = "sum"),main="Bilan P-ETP")
 
-head(pluvio)
 
 
 

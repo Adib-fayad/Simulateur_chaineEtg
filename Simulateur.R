@@ -7,7 +7,7 @@ source("fonctions_V3.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "CHALAMONT"
+SITE_CHOISI <- "MARLIEUX"
 # PRÉPARATION DES DONNÉES PLUIE (Calcul de Pant)
 # On calcule d'abord Pant sur le fichier météo (car c'est le même pour tous les étangs)
 # Pant = Pluie Antécédente sur 5 jours (excluant le jour même)
@@ -168,4 +168,12 @@ for (nom_etang in ordre_topologique) {
 
 
 liste_etangs[["CORVEYZIEUX"]] %>% select(dat, RR, Pant, CN_jour,CR,Volume_R,Vamont,BF)
+
+
+
+
+
+df<- df_bilan %>% select(,c("NOM","Vidange","dat")) %>% filter(Vidange=="oui")
+
+
 
