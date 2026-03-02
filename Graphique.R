@@ -3,7 +3,7 @@ library(zoo)
 library(igraph)
 library(scales) 
 library(ggraph)
-source("fonctions_V3.R")
+source("fonctions.R")
 
 ###Graphe pluvio
 
@@ -44,7 +44,7 @@ ggplot(df_tous_les_etangs, aes(x = dat)) +
 #
 
 dev.new()
-un_etang <- liste_etangs[["RIOUX"]]
+un_etang <- liste_etangs[["PARADIS"]]
 
 ggplot(un_etang, aes(x = dat, y = BF)) +
   geom_line(color = "blue", size = 1) +

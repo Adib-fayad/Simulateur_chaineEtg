@@ -31,6 +31,11 @@ ruisselement <- function(RR, CN_jour) {
     RR <= Ia ~ 0
   )
 }
+Peche <- function(peche,dat){
+  jour <- format(dat, "-%m-%d")
+  ifelse(jour == peche, "oui", "non")
+  
+}
 
 vidange <- function(Vidange,dat){
   jour <- format(dat, "-%m-%d")

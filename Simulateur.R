@@ -28,7 +28,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,Peche, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
@@ -43,6 +43,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
       Vidange= vidange(Vidange,dat),
+      peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
         format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax,  
@@ -69,7 +70,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 }else if (SITE_CHOISI == "CHALAMONT") {
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,Peche, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
@@ -84,6 +85,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
       Vidange= vidange(Vidange,dat),
+      peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
         format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax,  
@@ -140,7 +142,7 @@ for (nom_etang in ordre_topologique) {
   etangs_calcule$Vol_Vidange_Jour <- 0
   #numero des ligne de vidange et peche pour calculer le nbre de jours
   lignes_vidange <- which(etangs_calcule$Vidange == "oui")
-  lignes_peche <- which(etangs_calcule$Peche == "oui")
+  lignes_peche <- which(etangs_calcule$peche == "oui")
   
   if (length(lignes_vidange) > 0 & length(lignes_peche) > 0) {
     for (i in 1:length(lignes_vidange)) {
@@ -179,7 +181,6 @@ for (nom_etang in ordre_topologique) {
       Volume_R = etangs_calcule$Volume_R[jour],
       Vamont = etangs_calcule$Vamont[jour],
       VFuite = etangs_calcule$VFuite[jour], 
-      Vidange = etangs_calcule$Vidange[jour],
       Statut_Assec = statut_du_jour,
       Volume_Vidange_Jour = etangs_calcule$Vol_Vidange_Jour[jour]
     )
