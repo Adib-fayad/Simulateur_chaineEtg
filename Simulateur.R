@@ -3,7 +3,7 @@ library(zoo)
 library(igraph)
 library(scales) 
 library(ggraph)
-source("fonctions_V3.R")
+source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
@@ -28,7 +28,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
@@ -43,6 +43,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
       Vidange= vidange(Vidange,dat),
+      peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
         format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax,  
@@ -69,7 +70,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 }else if (SITE_CHOISI == "CHALAMONT") {
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
@@ -84,6 +85,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
       Vidange= vidange(Vidange,dat),
+      peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
         format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax,  

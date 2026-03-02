@@ -4,8 +4,7 @@ library(igraph)
 library(scales) 
 library(ggraph)
 library(readxl)
-
-source("fonctions_V3.R")
+source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
@@ -71,6 +70,8 @@ tab_etg <- cnetg %>%
 Vidange_peche <- read_excel("data.xlsx")
 head(Vidange_peche)
 
+tab_etg <- tab_etg %>%
+  left_join(Vidange_peche, by = "NOM")
 
 # Nettoyage
 #rm(etg, cnetg, Prof)
