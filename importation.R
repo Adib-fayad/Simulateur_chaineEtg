@@ -68,15 +68,21 @@ tab_etg <- cnetg %>%
 
 
 Vidange_peche <- read_excel("data.xlsx")
+  tab_etg <- tab_etg %>%
+  left_join(Vidange_peche, by = "NOM") %>%
+  mutate(
+    Date_temp = as.Date(paste0("2000", peche)),
+    Jours_vidange = round(SURFACE_SI), 
+    Vidange_temp = Date_temp - Jours_vidange,
+    Vidange = format(Vidange_temp, "-%m-%d")
+  ) %>%
+  select(-Date_temp, -Vidange_temp, -Jours_vidange)
+  
 head(Vidange_peche)
-
-tab_etg <- tab_etg %>%
-  left_join(Vidange_peche, by = "NOM")
 
 # Nettoyage
 #rm(etg, cnetg, Prof)
 head(tab_etg)
-
 
 
 

@@ -144,24 +144,28 @@ for (nom_etang in ordre_topologique) {
   lignes_vidange <- which(etangs_calcule$Vidange == "oui")
   lignes_peche <- which(etangs_calcule$peche == "oui")
   
-  if (length(lignes_vidange) > 0 & length(lignes_peche) > 0) {
-    for (i in 1:length(lignes_vidange)) {
-      if (i <= length(lignes_peche)) {
+  if (length(lignes_vidange) > 0) {
+    # On parcourt chaque date d'ouverture de bonde
+    for (t0 in lignes_vidange) {
+      
+      # LA CORRECTION EST LÀ : On cherche uniquement les pêches qui sont APRÈS l'ouverture
+      peches_futures <- lignes_peche[lignes_peche > t0]
+      
+      if (length(peches_futures) > 0) {
         
-        t0 <- lignes_vidange[i]
-        tfin <- lignes_peche[i]
+        tfin <- peches_futures[1] # On prend le jour de pêche le plus proche
         delta_T <- tfin - t0
         
         if (delta_T > 0) {
-         # 1.7 ha d'eau = 17000 m3 
-          Qmax <- 17000  
+          # Paramètres de la courbe de tarissement
+          Qmax <- 17000  # (À adapter selon ton volume moyen)
           Qmin <- 8000   
           
-          #équation de tarissement
+          # Calcul de la chute exponentielle
           k <- -(1 / delta_T) * log(Qmin / Qmax)
           jours_ecoules <- 0:delta_T
           
-          # On remplit les jours concernés avec la courbe descendante
+          # On injecte la belle courbe lisse sur les 10 jours
           etangs_calcule$Vol_Vidange_Jour[t0:tfin] <- Qmax * exp(-k * jours_ecoules)
         }
       }
