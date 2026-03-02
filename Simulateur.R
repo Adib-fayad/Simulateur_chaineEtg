@@ -28,7 +28,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,Peche, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
@@ -69,7 +69,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 }else if (SITE_CHOISI == "CHALAMONT") {
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,Peche, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne

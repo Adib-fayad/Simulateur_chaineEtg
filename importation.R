@@ -4,8 +4,7 @@ library(igraph)
 library(scales) 
 library(ggraph)
 library(readxl)
-
-source("fonctions_V3.R")
+source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
@@ -71,6 +70,8 @@ tab_etg <- cnetg %>%
 Vidange_peche <- read_excel("data.xlsx")
 head(Vidange_peche)
 
+tab_etg <- tab_etg %>%
+  left_join(Vidange_peche, by = "NOM")
 
 # Nettoyage
 #rm(etg, cnetg, Prof)
@@ -81,39 +82,39 @@ head(tab_etg)
 
 
 if (SITE_CHOISI == "MARLIEUX") {
-
-#  Chargement Pluvio (Marlieux)
-fichiers_meteo <- c(
-  "meteo/Q_01_previous-1950-2024_RR-T-Vent.CSV", 
-  "meteo/Q_01_latest-2025-2026_RR-T-Vent.csv"
-)
-
-meteo <- fichiers_meteo %>%
-  map_df(~read.csv2(.x)) %>%  # Attention à bien garder read.csv2 ici
-  filter(NOM_USUEL == "MARLIEUX") %>%
-  mutate(
-    dat = as.Date(as.character(AAAAMMJJ), format="%Y%m%d"),
-    an = format(dat, "%Y"),
-    RR = as.numeric(as.character(RR))
-  ) %>%
-  select(dat, an, RR, NOM_USUEL)
-
-#  Chargement ETP
-files_etp <- paste0("meteo/QUOT_ETPgrille_", 2021:2025, ".csv")
-
-etp_marlieux <- files_etp %>%
-  map_df(~read.csv(.x, sep=";", dec = ".")) %>%
-  # On utilise une petite marge pour la latitude/longitude 
-  filter(abs(latitude - 46.0385) < 0.05 & abs(longitude - 5.0443) < 0.05) %>%
-  mutate(dat = as.Date(as.character(date), format="%Y%m%d")) %>%
-  select(dat, ETP_grille)
-
-pluvio <- meteo %>%
-  inner_join(etp_marlieux, by = "dat") %>%
-  mutate(
-    ETP_grille = as.numeric(as.character(ETP_grille)),
-    P_ETP = RR - ETP_grille
+  
+  #  Chargement Pluvio (Marlieux)
+  fichiers_meteo <- c(
+    "meteo/Q_01_previous-1950-2024_RR-T-Vent.CSV", 
+    "meteo/Q_01_latest-2025-2026_RR-T-Vent.csv"
   )
+  
+  meteo <- fichiers_meteo %>%
+    map_df(~read.csv2(.x)) %>%  # Attention à bien garder read.csv2 ici
+    filter(NOM_USUEL == "MARLIEUX") %>%
+    mutate(
+      dat = as.Date(as.character(AAAAMMJJ), format="%Y%m%d"),
+      an = format(dat, "%Y"),
+      RR = as.numeric(as.character(RR))
+    ) %>%
+    select(dat, an, RR, NOM_USUEL)
+  
+  #  Chargement ETP
+  files_etp <- paste0("meteo/QUOT_ETPgrille_", 2021:2025, ".csv")
+  
+  etp_marlieux <- files_etp %>%
+    map_df(~read.csv(.x, sep=";", dec = ".")) %>%
+    # On utilise une petite marge pour la latitude/longitude 
+    filter(abs(latitude - 46.0385) < 0.05 & abs(longitude - 5.0443) < 0.05) %>%
+    mutate(dat = as.Date(as.character(date), format="%Y%m%d")) %>%
+    select(dat, ETP_grille)
+  
+  pluvio <- meteo %>%
+    inner_join(etp_marlieux, by = "dat") %>%
+    mutate(
+      ETP_grille = as.numeric(as.character(ETP_grille)),
+      P_ETP = RR - ETP_grille
+    )
 } else if (SITE_CHOISI == "CHALAMONT") {
   fichiers_meteo <- paste0("CHALAMON_meteo/PluieJour/Pluie_", 2022:2023, ".csv")
   
