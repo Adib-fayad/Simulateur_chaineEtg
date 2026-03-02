@@ -3,7 +3,7 @@ library(zoo)
 library(igraph)
 library(scales) 
 library(ggraph)
-source("fonctions_V3.R")
+source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
@@ -136,6 +136,36 @@ for (nom_etang in ordre_topologique) {
   
   Stockage_Vamont <- numeric(nrow(etangs_calcule))
   
+  #calcule boucle exponetielle
+  etangs_calcule$Vol_Vidange_Jour <- 0
+  #numero des ligne de vidange et peche pour calculer le nbre de jours
+  lignes_vidange <- which(etangs_calcule$Vidange == "oui")
+  lignes_peche <- which(etangs_calcule$Peche == "oui")
+  
+  if (length(lignes_vidange) > 0 & length(lignes_peche) > 0) {
+    for (i in 1:length(lignes_vidange)) {
+      if (i <= length(lignes_peche)) {
+        
+        t0 <- lignes_vidange[i]
+        tfin <- lignes_peche[i]
+        delta_T <- tfin - t0
+        
+        if (delta_T > 0) {
+         # 1.7 ha d'eau = 17000 m3 
+          Qmax <- 17000  
+          Qmin <- 8000   
+          
+          #équation de tarissement
+          k <- -(1 / delta_T) * log(Qmin / Qmax)
+          jours_ecoules <- 0:delta_T
+          
+          # On remplit les jours concernés avec la courbe descendante
+          etangs_calcule$Vol_Vidange_Jour[t0:tfin] <- Qmax * exp(-k * jours_ecoules)
+        }
+      }
+    }
+  }
+  
   for (jour in 2:nrow(etangs_calcule)) {
     
     annee_actuelle <- format(etangs_calcule$dat[jour], "%Y") 
@@ -150,7 +180,8 @@ for (nom_etang in ordre_topologique) {
       Vamont = etangs_calcule$Vamont[jour],
       VFuite = etangs_calcule$VFuite[jour], 
       Vidange = etangs_calcule$Vidange[jour],
-      Statut_Assec = statut_du_jour
+      Statut_Assec = statut_du_jour,
+      Volume_Vidange_Jour = etangs_calcule$Vol_Vidange_Jour[jour]
     )
     etangs_calcule$BF[jour]= resultat$BF
     Stockage_Vamont[jour]= resultat$Vsortant

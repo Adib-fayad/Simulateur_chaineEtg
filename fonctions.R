@@ -39,22 +39,20 @@ vidange <- function(Vidange,dat){
 }
 
 
-Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Vidange, Statut_Assec){
+Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Volume_Vidange_Jour){
   
   Eau_Dispo = BF + Volume_R + Vamont
   
-  #LA FUITE  ne peut pas dépasser l'eau disponible
+  # LA FUITE
   Fuite_Reelle = min(VFuite, max(0, Eau_Dispo))
   Eau_Dispo = Eau_Dispo - Fuite_Reelle
   Vsortant = Fuite_Reelle 
   
-  #L'ÉVAPORATION (Vp_etp est négatif en été, positif s'il pleut)
+  # L'ÉVAPORATION
   if (Statut_Assec == "Assec") {
-    # on pert pas le peux d eau qui tombe mais on en pert pas plus.
     Evap_Reelle = max(0, Vp_etp)
   } else {
     if (Vp_etp < 0) {
-      # on ne peut évaporer que l'eau qui existe vraiment
       Evap_Reelle = max(Vp_etp, -Eau_Dispo) 
     } else {
       Evap_Reelle = Vp_etp 
@@ -62,7 +60,7 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Vidange, Statut_A
   }
   Eau_Dispo = Eau_Dispo + Evap_Reelle 
   
-  
+  # GESTION DU NIVEAU ET DE LA VIDANGE
   if (Statut_Assec == "Assec") {
     # L'étang ne garde rien, tout ce qui reste part en aval
     Vsortant = Vsortant + Eau_Dispo
@@ -70,25 +68,22 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Vidange, Statut_A
     
   } else if (Statut_Assec == "Evolage") {
     
-    if (Vidange == "oui") {
-      # Toute l'eau part en une seule fois a voir comment lisser sur plusieur jours.
-      Volume_vidange = Eau_Dispo
+    if (Volume_Vidange_Jour > 0) {
       
-      Vsortant = Vsortant + Volume_vidange
-      BF = 0
+      # On ne peut pas vider plus que ce qu'il reste dans l'étang !
+      Volume_reel_vide = min(Volume_Vidange_Jour, max(0, Eau_Dispo))
       
+      Vsortant = Vsortant + Volume_reel_vide
+      Eau_Dispo = Eau_Dispo - Volume_reel_vide
+    }
+    
+    # Débordement naturel 
+    if (Eau_Dispo > Vmax) {
+      Surplus = Eau_Dispo - Vmax
+      Vsortant = Vsortant + Surplus
+      BF = Vmax 
     } else {
-      
-      if (Eau_Dispo > Vmax) {
-        
-        Surplus = Eau_Dispo - Vmax
-        
-        Vsortant = Vsortant + Surplus
-        BF = Vmax 
-      } else {
-        
-        BF = Eau_Dispo
-      }
+      BF = Eau_Dispo
     }
   }
   
