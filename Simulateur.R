@@ -148,7 +148,7 @@ for (nom_etang in ordre_topologique) {
     # On parcourt chaque date d'ouverture de bonde
     for (t0 in lignes_vidange) {
       
-      # LA CORRECTION EST LÀ : On cherche uniquement les pêches qui sont APRÈS l'ouverture
+      # On cherche uniquement les pêches qui sont APRÈS l'ouverture
       peches_futures <- lignes_peche[lignes_peche > t0]
       
       if (length(peches_futures) > 0) {
@@ -167,32 +167,54 @@ for (nom_etang in ordre_topologique) {
           k <- -(1 / delta_T) * log(Qmin / Qmax)
           jours_ecoules <- 0:delta_T
           
-          # On injecte la belle courbe lisse sur les 10 jours
+          # On injecte la belle courbe lisse sur les X jours
           etangs_calcule$Vol_Vidange_Jour[t0:tfin] <- Qmax * exp(-k * jours_ecoules)
         }
       }
     }
   }
-  
+  forcage_ouverture_assec <- FALSE
   for (jour in 2:nrow(etangs_calcule)) {
+    
+    if (format(etangs_calcule$dat[jour], "%m-%d") == "01-01") {
+      forcage_ouverture_assec <- FALSE 
+    }
     
     annee_actuelle <- format(etangs_calcule$dat[jour], "%Y") 
     nom_colonne <- paste0("Assec", annee_actuelle)
     statut_du_jour <- as.character(etangs_calcule[jour, nom_colonne])
     
-    resultat<- Bfinal(
+    #jour de la peche
+    if (etangs_calcule$peche[jour] == "oui") {
+      # On regarde l'année d'après
+      annee_prochaine <- as.character(as.numeric(annee_actuelle) + 1)
+      colonne_prochaine <- paste0("Assec", annee_prochaine)
+    # Si l'année prochaine est prévue en Assec laisse ouvert
+      if (colonne_prochaine %in% names(etangs_calcule)) {
+        if (etangs_calcule[jour, colonne_prochaine] == "Assec") {
+          forcage_ouverture_assec <- TRUE
+        }
+      }
+    }
+    if (forcage_ouverture_assec == TRUE) {
+      statut_du_jour <- "Assec"
+    }  
+    
+    resultat <- Bfinal(
       Vmax = etangs_calcule$Vmax[jour],
       BF = etangs_calcule$BF[jour-1] ,
       Vp_etp = etangs_calcule$Vp_etp[jour], 
       Volume_R = etangs_calcule$Volume_R[jour],
       Vamont = etangs_calcule$Vamont[jour],
       VFuite = etangs_calcule$VFuite[jour], 
-      Statut_Assec = statut_du_jour,
+      Statut_Assec = statut_du_jour,       # <--- R utilise le statut corrigé !
       Volume_Vidange_Jour = etangs_calcule$Vol_Vidange_Jour[jour]
     )
-    etangs_calcule$BF[jour]= resultat$BF
-    Stockage_Vamont[jour]= resultat$Vsortant
+    
+    etangs_calcule$BF[jour] = resultat$BF
+    Stockage_Vamont[jour] = resultat$Vsortant
   }
+  
   liste_etangs[[nom_etang]] <- etangs_calcule
   
   exutoire <- etangs_calcule$Exutoire_1[1]

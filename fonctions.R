@@ -66,23 +66,13 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Vol
   Eau_Dispo = Eau_Dispo + Evap_Reelle 
   
   # GESTION DU NIVEAU ET DE LA VIDANGE
-  if (Statut_Assec == "Assec") {
-    # L'étang ne garde rien, tout ce qui reste part en aval
-    Vsortant = Vsortant + Eau_Dispo
-    BF = 0
+  if (Volume_Vidange_Jour > 0) {
     
-  } else if (Statut_Assec == "Evolage") {
+    Volume_reel_vide = min(Volume_Vidange_Jour, max(0, Eau_Dispo))
+    Vsortant = Vsortant + Volume_reel_vide
+    Eau_Dispo = Eau_Dispo - Volume_reel_vide
     
-    if (Volume_Vidange_Jour > 0) {
-      
-      # On ne peut pas vider plus que ce qu'il reste dans l'étang !
-      Volume_reel_vide = min(Volume_Vidange_Jour, max(0, Eau_Dispo))
-      
-      Vsortant = Vsortant + Volume_reel_vide
-      Eau_Dispo = Eau_Dispo - Volume_reel_vide
-    }
-    
-    # Débordement naturel 
+    # Sécurité au cas où il pleut énormément pendant la vidange
     if (Eau_Dispo > Vmax) {
       Surplus = Eau_Dispo - Vmax
       Vsortant = Vsortant + Surplus
@@ -90,7 +80,23 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Vol
     } else {
       BF = Eau_Dispo
     }
-  }
-  
+    
+    # La vidange est finie, et l'étang est officiellement en Assec
+  } else if (Statut_Assec == "Assec") {
+    # L'étang ne garde rien
+    Vsortant = Vsortant + Eau_Dispo
+    BF = 0
+    
+    #L'étang est en Evolage il se remplit ou déborde
+  } else {
+    if (Eau_Dispo > Vmax) {
+      Surplus = Eau_Dispo - Vmax
+      Vsortant = Vsortant + Surplus
+      BF = Vmax 
+    } else {
+      BF = Eau_Dispo
+    }
+  } 
   return(list(BF = BF, Vsortant = Vsortant))
 }
+  
