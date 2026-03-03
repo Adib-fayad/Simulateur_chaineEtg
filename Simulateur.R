@@ -7,7 +7,7 @@ source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "MARLIEUX"
+SITE_CHOISI <- "CHALAMONT"
 # PRÉPARATION DES DONNÉES PLUIE (Calcul de Pant)
 # On calcule d'abord Pant sur le fichier météo (car c'est le même pour tous les étangs)
 # Pant = Pluie Antécédente sur 5 jours (excluant le jour même)
@@ -46,7 +46,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
-        format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax,  
+        format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax/2,  
         TRUE ~ 0
       )
     )
@@ -88,7 +88,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
-        format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax,  
+        format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax/2,  
         TRUE ~ 0
       )
     )

@@ -8,7 +8,7 @@ source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "MARLIEUX"
+SITE_CHOISI <- "CHALAMONT"
 
 # Chargement et nettoyage initial
 # Utilisation de dplyr pour renommer et filtrer en une étape
