@@ -13,6 +13,7 @@ barplot(tapply(pluvio$P_ETP,as.factor(pluvio$an),FUN = "sum"),main="Bilan P-ETP"
 
 head(pluvio)
 
+dev.new()
 
 ####Graphe chane d'etangs
 df_tous_les_etangs <- bind_rows(liste_etangs)
@@ -44,7 +45,7 @@ ggplot(df_tous_les_etangs, aes(x = dat)) +
 #
 
 dev.new()
-un_etang <- liste_etangs[["GRAND ETANG LA ROUE"]]
+un_etang <- liste_etangs[["PARADIS"]]
 
 ggplot(un_etang, aes(x = dat, y = BF)) +
   geom_line(color = "blue", size = 1) +
@@ -68,7 +69,7 @@ ggplot(un_etang_2022, aes(x = dat, y = BF)) +
 
 
 # Remplace "NOM_ETANG_VIDE" par un étang qui pose problème
-diagnostic <- liste_etangs[["GRAND ETANG LA ROUE"]]
+diagnostic <- liste_etangs[["PARADIS"]]
 
 # On va tracer le volume (BF) et l'évaporation/pluie (Vp_etp) pour comprendre
 ggplot(diagnostic, aes(x = dat)) +
@@ -76,3 +77,19 @@ ggplot(diagnostic, aes(x = dat)) +
   theme_minimal() +
   labs(title = paste("Diagnostic de la panne d'eau -", diagnostic$NOM[1]),
        x = "Date", y = "Volume (m3)")
+
+
+
+un_etang_zoom <- liste_etangs[["VIEUX"]] %>%
+  filter(dat >= as.Date("2022-11-08") & dat <= as.Date("2022-11-22")) %>% select(, -Position,-CNI)
+un_etang_zoom
+# On donne la colonne BF pour la hauteur, et la colonne dat pour le texte en dessous
+barplot(
+  height = un_etang_zoom$Vamont, 
+  names.arg = un_etang_zoom$dat, 
+  col = "steelblue",           # Une jolie couleur
+  main = "Volume de l'étang",  # Le titre
+  ylab = "Volume (m3)",        # Le nom de l'axe vertical
+  las = 2                      # L'astuce magique : las = 2 tourne les dates à la verticale !
+)
+

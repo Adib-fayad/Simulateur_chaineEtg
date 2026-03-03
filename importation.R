@@ -72,7 +72,7 @@ Vidange_peche <- read_excel("data.xlsx")
   left_join(Vidange_peche, by = "NOM") %>%
   mutate(
     Date_temp = as.Date(paste0("2000", peche)),
-    Jours_vidange = round(SURFACE_SI), 
+    Jours_vidange = pmin(round(SURFACE_SI),10), 
     Vidange_temp = Date_temp - Jours_vidange,
     Vidange = format(Vidange_temp, "-%m-%d")
   ) %>%
@@ -97,7 +97,7 @@ if (SITE_CHOISI == "MARLIEUX") {
   )
   
   meteo <- fichiers_meteo %>%
-    map_df(~read.csv2(.x)) %>%  # Attention à bien garder read.csv2 ici
+    map_df(~read.csv2(.x)) %>%  
     filter(NOM_USUEL == "MARLIEUX") %>%
     mutate(
       dat = as.Date(as.character(AAAAMMJJ), format="%Y%m%d"),

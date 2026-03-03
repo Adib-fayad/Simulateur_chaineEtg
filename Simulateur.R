@@ -48,25 +48,31 @@ if (SITE_CHOISI == "MARLIEUX"){
       BF= case_when(
         format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax/2,  
         TRUE ~ 0
-      )
-    )
-  
-  df_bilan <- df_bilan %>%
-    arrange(NOM, dat) %>% 
-    
-    group_by(NOM, annee_calcul = format(dat, "%Y")) %>%     
+      )) %>% 
+     group_by(NOM, annee = format(dat, "%Y")) %>%     
     
     mutate(
-      across(
-        .cols = num_range("Assec", 2021:2025),
-        .fns = ~ case_when(
-          cumany(Vidange == "oui") ~ "Evolage", # Ne bascule en Evolage que pour la fin de CETTE année-là
-          TRUE ~ .x                             
-        )
+      S_Actuel = case_when(
+        annee == "2021" ~ Assec2021, 
+        annee == "2022" ~ Assec2022,
+        annee == "2023" ~ Assec2023, 
+        annee == "2024" ~ Assec2024,
+        annee == "2025" ~ Assec2025, 
+        TRUE ~ "Evolage"
+      ),
+      S_Futur = case_when(
+        annee == "2021" ~ Assec2022, 
+        annee == "2022" ~ Assec2023,
+        annee == "2023" ~ Assec2024, 
+        annee == "2024" ~ Assec2025,
+        TRUE ~ S_Actuel
+      ),                            
+      Statut_Simu = case_when(
+        peche == "oui" | Vidange == "oui" ~ "Evolage",
+        cumany(peche == "oui") ~ S_Futur,
+        TRUE ~ S_Actuel
       )
-    ) %>%
-    ungroup() %>%
-    select(-annee_calcul)
+    ) %>% ungroup() %>% select(-annee, -S_Actuel, -S_Futur)
 }else if (SITE_CHOISI == "CHALAMONT") {
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
@@ -91,31 +97,28 @@ if (SITE_CHOISI == "MARLIEUX"){
         format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax/2,  
         TRUE ~ 0
       )
-    )
-  
-  df_bilan <- df_bilan %>%
-    arrange(NOM, dat) %>% 
-    
-    group_by(NOM, annee_calcul = format(dat, "%Y")) %>%     
-    
-    mutate(
-      across(
-        .cols = num_range("Assec", 2022:2023),
-        .fns = ~ case_when(
-          cumany(Vidange == "oui") ~ "Evolage", # Ne bascule en Evolage que pour la fin de CETTE année-là
-          TRUE ~ .x                             
-        )
-      )
     ) %>%
-    ungroup() %>%
-    select(-annee_calcul)
+  group_by(NOM, annee = format(dat, "%Y")) %>%
+  mutate(
+    S_Actuel = case_when(
+      annee == "2022" ~ Assec2022, 
+      annee == "2023" ~ Assec2023, 
+      TRUE ~ "Evolage"
+    ),
+    S_Futur = case_when(
+      annee == "2022" ~ Assec2023, 
+      TRUE ~ S_Actuel
+    ),
+    Statut_Simu = case_when(
+      peche == "oui" | Vidange == "oui" ~ "Evolage",
+      cumany(peche == "oui") ~ S_Futur,
+      TRUE ~ S_Actuel
+    )
+  ) %>% ungroup() %>% select(-annee, -S_Actuel, -S_Futur)
 }
-head(df_bilan)
 
 liste_etangs <- df_bilan %>% split(.$NOM)
-
-#liste_etangs[[1]] %>% select(dat, RR, Pant, CN_jour)
-
+#liste_etangs[[$VIEUX]] %>% select(dat, RR, Pant, CN_jour)
 
 #On donne juste les deux colonnes à igraph (De qui -> Vers qui)
 liens <- df_bilan %>% 
@@ -173,32 +176,9 @@ for (nom_etang in ordre_topologique) {
       }
     }
   }
-  forcage_ouverture_assec <- FALSE
   for (jour in 2:nrow(etangs_calcule)) {
     
-    if (format(etangs_calcule$dat[jour], "%m-%d") == "01-01") {
-      forcage_ouverture_assec <- FALSE 
-    }
-    
-    annee_actuelle <- format(etangs_calcule$dat[jour], "%Y") 
-    nom_colonne <- paste0("Assec", annee_actuelle)
-    statut_du_jour <- as.character(etangs_calcule[jour, nom_colonne])
-    
-    #jour de la peche
-    if (etangs_calcule$peche[jour] == "oui") {
-      # On regarde l'année d'après
-      annee_prochaine <- as.character(as.numeric(annee_actuelle) + 1)
-      colonne_prochaine <- paste0("Assec", annee_prochaine)
-    # Si l'année prochaine est prévue en Assec laisse ouvert
-      if (colonne_prochaine %in% names(etangs_calcule)) {
-        if (etangs_calcule[jour, colonne_prochaine] == "Assec") {
-          forcage_ouverture_assec <- TRUE
-        }
-      }
-    }
-    if (forcage_ouverture_assec == TRUE) {
-      statut_du_jour <- "Assec"
-    }  
+    statut_du_jour <- etangs_calcule$Statut_Simu[jour]
     
     resultat <- Bfinal(
       Vmax = etangs_calcule$Vmax[jour],
@@ -207,7 +187,7 @@ for (nom_etang in ordre_topologique) {
       Volume_R = etangs_calcule$Volume_R[jour],
       Vamont = etangs_calcule$Vamont[jour],
       VFuite = etangs_calcule$VFuite[jour], 
-      Statut_Assec = statut_du_jour,       # <--- R utilise le statut corrigé !
+      Statut_Assec = statut_du_jour,
       Volume_Vidange_Jour = etangs_calcule$Vol_Vidange_Jour[jour]
     )
     
