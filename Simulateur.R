@@ -7,7 +7,7 @@ source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "MARLIEUX"
+SITE_CHOISI <- "CHALAMONT"
 # PRÉPARATION DES DONNÉES PLUIE (Calcul de Pant)
 # On calcule d'abord Pant sur le fichier météo (car c'est le même pour tous les étangs)
 # Pant = Pluie Antécédente sur 5 jours (excluant le jour même)
@@ -46,7 +46,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
-        format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax,  
+        format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax/2,  
         TRUE ~ 0
       )
     )
@@ -88,7 +88,7 @@ if (SITE_CHOISI == "MARLIEUX"){
       peche= Peche(peche,dat),
       Vamont= 0,
       BF= case_when(
-        format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax,  
+        format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax/2,  
         TRUE ~ 0
       )
     )
@@ -158,8 +158,10 @@ for (nom_etang in ordre_topologique) {
         
         if (delta_T > 0) {
           # Paramètres de la courbe de tarissement
-          Qmax <- 17000  # (À adapter selon ton volume moyen)
-          Qmin <- 8000   
+          # On prend par exemple 30% du Vmax pour le premier jour de vidange, et 5% pour le dernier
+          Volume_Etang = etangs_calcule$Vmax[t0]
+          Qmax <- Volume_Etang * 0.30  
+          Qmin <- Volume_Etang * 0.05
           
           # Calcul de la chute exponentielle
           k <- -(1 / delta_T) * log(Qmin / Qmax)

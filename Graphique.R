@@ -44,13 +44,35 @@ ggplot(df_tous_les_etangs, aes(x = dat)) +
 #
 
 dev.new()
-un_etang <- liste_etangs[["PARADIS"]]
+un_etang <- liste_etangs[["GRAND ETANG LA ROUE"]]
 
 ggplot(un_etang, aes(x = dat, y = BF)) +
   geom_line(color = "blue", size = 1) +
   theme_minimal() +
   labs(title = paste("Évolution du volume -", un_etang$NOM[1]),
-       x = "Date", y = "Volume de l'étang (m³)")
+       x = "Date", y = "Volume de l'étang (m³)")+ scale_x_date(date_breaks = "1 month", date_labels = "%B")
 
+
+# 1. On extrait l'étang ET on filtre directement sur l'année 2022
+un_etang_2022 <- liste_etangs[["SALE"]] %>%
+  filter(format(dat, "%Y") == "2022")
+
+# 2. On dessine le graphique avec ce nouveau tableau
+ggplot(un_etang_2022, aes(x = dat, y = BF)) +
+  geom_line(color = "blue", size = 1) +  # (Note : R te dira peut-être d'utiliser 'linewidth = 1' à la place de 'size' selon ta version)
+  theme_minimal() +
+  labs(title = paste("Évolution du volume en 2022 -", un_etang_2022$NOM[1]),
+       x = "Date", y = "Volume de l'étang (m³)")+ scale_x_date(date_breaks = "1 month", date_labels = "%B")
 
 #
+
+
+# Remplace "NOM_ETANG_VIDE" par un étang qui pose problème
+diagnostic <- liste_etangs[["GRAND ETANG LA ROUE"]]
+
+# On va tracer le volume (BF) et l'évaporation/pluie (Vp_etp) pour comprendre
+ggplot(diagnostic, aes(x = dat)) +
+  geom_line(aes(y = BF, color = "Volume de l'étang (BF)"), size = 1) +
+  theme_minimal() +
+  labs(title = paste("Diagnostic de la panne d'eau -", diagnostic$NOM[1]),
+       x = "Date", y = "Volume (m3)")
