@@ -43,8 +43,8 @@ lidar  <- rast(path_lidar)
 bv <- st_read(path_bv) %>%  st_transform(crs = 2154) 
 OS <- st_read(path_OS)
 
-
-for (i in 1:nrow(bv)) {
+#nrow(bv)
+for (i in 1:3) {
 # On prend le premier BV pour l'exemple
 bv_selection <- bv[i, ] 
 nom_bv <- bv_selection$CODE 
@@ -140,7 +140,7 @@ writeRaster(rast(demi_tif), filename = nom_fichier_gpkg, names = "Demi_Bassins",
 # auvegarde des VECTEURS
 st_write(etangs_final, nom_fichier_gpkg, layer = "Etangs", append = TRUE,quiet = TRUE) 
 st_write(routes_final, nom_fichier_gpkg, layer = "Routes", append = TRUE,quiet = TRUE)
-st_write(os_final, nom_fichier_gpkg, layer = "OS", append = TRUE,quiet = TRUE) 
+st_write(os_final, nom_fichier_gpkg, layer = "OS", append = TRUE,quiet = TRUE,layer_options = "GEOMETRY_NAME=geom") 
 st_write(bv_selection, nom_fichier_gpkg, layer = "bv", append = TRUE,quiet = TRUE) 
 
 #style
@@ -152,7 +152,7 @@ style_etangs$f_geometry_column <- "geom"
 
 style_os <- style_os_modele
 style_os$f_table_name <- "OS"
-style_os$f_geometry_column <- attr(os_final, "sf_column") 
+style_os$f_geometry_column <- "geom"
 
 style_acc <- style_acc_modele
 style_acc$f_table_name <- "Accumulation"
@@ -172,7 +172,7 @@ fichiers_a_supprimer <- list.files(path = "GPKG_Sortie", pattern = "^temp_", ful
 file.remove(fichiers_a_supprimer)
 gc()
 }
-print(paste("Génial, tout est dans le même GeoPackage pour le BV :", nom_bv))
+
 
 
 
