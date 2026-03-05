@@ -15,41 +15,24 @@ path_OS     <- "SIG/OS.gpkg"
 dir.create("GPKG_Sortie", showWarnings = FALSE)
 
 ###
+# Style Étangs
+# PRÉPARATION DES MODÈLES DE STYLES 
 con_src <- dbConnect(SQLite(), path_etangs)
 style_data <- dbGetQuery(con_src, "SELECT * FROM layer_styles WHERE f_table_name = 'inpe' LIMIT 1")
 dbDisconnect(con_src)
-style_data$f_table_name <- "Etangs"
-style_data$f_geometry_column <- "geom"
-
-
+names(style_data) <- tolower(names(style_data))
 
 con_src_os <- dbConnect(SQLite(), path_OS)
-style_os <- dbGetQuery(con_src_os, "SELECT * FROM layer_styles WHERE f_table_name = 'departement_01' LIMIT 1")
+style_os_modele <- dbGetQuery(con_src_os, "SELECT * FROM layer_styles WHERE f_table_name = 'departement_01' LIMIT 1")
 dbDisconnect(con_src_os)
+names(style_os_modele) <- tolower(names(style_os_modele))
 
-style_os$f_table_name <- "OS"
-style_os$f_geometry_column <- "geom"
-
-#style raster
 chemin_qml_acc <- "SIG/test.qml" 
-
 qml_texte <- paste(readLines(chemin_qml_acc, warn = FALSE), collapse = "\n")
+style_acc_modele <- style_data[1, ] # On clone la structure
 
-style_accumulation$f_table_name      <- "Accumulation"
-style_accumulation$f_geometry_column <- NA_character_
-style_accumulation$styleName         <- "Style Accumulation"
-style_accumulation$styleQML          <- qml_texte
-style_accumulation$useAsDefault      <- 1
-style_accumulation$update_time       <- format(Sys.time(), "%Y-%m-%dT%H:%M:%OSZ")
 
-# S'il y a une colonne 'id', on la met à NA pour que la nouvelle base gère l'auto-incrément
-if("id" %in% names(style_accumulation)) style_accumulation$id <- NA
 
-# On fait pareil pour style_os pour être sûr qu'il a bien les 13 colonnes aussi
-# (Optionnel si style_os vient déjà d'un GeoPackage QGIS, mais plus sûr)
-temp_os <- style_data[1, ]
-temp_os[1, names(style_os)] <- style_os[1, ] # On transfère les données de style_os dans la structure de 13 col
-style_os <- temp_os
 
 
 # Chargement des couches sources
@@ -63,7 +46,7 @@ OS <- st_read(path_OS)
 
 for (i in 1:nrow(bv)) {
 # On prend le premier BV pour l'exemple
-bv_selection <- bv[1, ] 
+bv_selection <- bv[i, ] 
 nom_bv <- bv_selection$CODE 
 print(paste("--- Traitement du BV :", nom_bv, "(", i, "/", nrow(bv), ") ---"))
 # Création du Buffer 
@@ -163,10 +146,26 @@ st_write(bv_selection, nom_fichier_gpkg, layer = "bv", append = TRUE,quiet = TRU
 #style
 con_dest <- dbConnect(SQLite(), nom_fichier_gpkg)
 
-dbWriteTable(con_dest, "layer_styles", style_data, append = TRUE)
-dbWriteTable(con_dest, "layer_styles", style_os, append = TRUE)
-dbWriteTable(con_dest, "layer_styles", style_accumulation, append = TRUE)
+style_etangs <- style_data
+style_etangs$f_table_name <- "Etangs"
+style_etangs$f_geometry_column <- "geom"
 
+style_os <- style_os_modele
+style_os$f_table_name <- "OS"
+style_os$f_geometry_column <- attr(os_final, "sf_column") 
+
+style_acc <- style_acc_modele
+style_acc$f_table_name <- "Accumulation"
+style_acc$f_geometry_column <- "" 
+style_acc$styleqml <- qml_texte
+style_acc$stylename <- "Style Accumulation"
+style_acc$useasdefault <- 1
+
+styles_complet <- rbind(style_etangs, style_os, style_acc)
+if("id" %in% names(styles_complet)) styles_complet <- styles_complet %>% select(-id)
+
+dbWriteTable(con_dest, "layer_styles", styles_complet, overwrite = TRUE, row.names = FALSE)
+dbExecute(con_dest, "CREATE INDEX IF NOT EXISTS msg_layer_styles_idx ON layer_styles (f_table_name, f_geometry_column);")
 dbDisconnect(con_dest)
 
 fichiers_a_supprimer <- list.files(path = "GPKG_Sortie", pattern = "^temp_", full.names = TRUE)
