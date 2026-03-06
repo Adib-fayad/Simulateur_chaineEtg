@@ -44,7 +44,7 @@ bv <- st_read(path_bv) %>%  st_transform(crs = 2154)
 OS <- st_read(path_OS)
 
 #nrow(bv)
-for (i in 1:3) {
+for (i in 1:2) {
 # On prend le premier BV pour l'exemple
 bv_selection <- bv[i, ] 
 nom_bv <- bv_selection$CODE 
@@ -95,6 +95,8 @@ demi_tif <- paste0("GPKG_Sortie/temp_demi_", nom_bv, ".tif")
 
 seuil_pixels <- (as.numeric(bv_selection$SURFACE) * 10000) / 25
 
+
+
 qgis_run_algorithm(
   "grass:r.watershed",
   elevation    = mnt_temp,
@@ -106,6 +108,51 @@ qgis_run_algorithm(
   #"-s"         = TRUE,
   .quiet       = TRUE 
 )
+
+print(paste("Lancement de l'hydrologie GRASS pour le BV avec depression :", nom_bv))
+
+mnt_dep_temp <- "GPKG_Sortie/temp_mnt.tif"
+writeRaster(lidar_5m, mnt_dep_temp, overwrite = TRUE)
+
+#Préparation des chemins de sortie pour les 4 fichiers 
+acc_dep_tif  <- paste0("GPKG_Sortie/temp_acc_dep_", nom_bv, ".tif")
+dir_dep_tif  <- paste0("GPKG_Sortie/temp_dir_dep_", nom_bv, ".tif")
+bas_dep_tif  <- paste0("GPKG_Sortie/temp_bas_dep_", nom_bv, ".tif")
+demi_dep_tif <- paste0("GPKG_Sortie/temp_demi_dep_", nom_bv, ".tif")
+
+seuil_pixels <- (as.numeric(bv_selection$SURFACE) * 10000) / 25
+
+
+etangs_raster_plan <- racine_5m <- lidar_5m * NA
+
+etangs_depressions <- rasterize(vect(etangs_final), etangs_raster_plan, field = 1)
+
+dep_temp <- "GPKG_Sortie/temp_dep.tif"
+writeRaster(etangs_depressions, dep_temp, overwrite = TRUE)
+
+
+qgis_run_algorithm(
+  "grass:r.watershed",
+  elevation    = mnt_dep_temp,
+  depression   = dep_temp,
+  threshold    = seuil_pixels,
+  accumulation = acc_dep_tif,
+  drainage     = dir_dep_tif,
+  basin        = bas_dep_tif,
+  half_basin   = demi_dep_tif,
+  #"-s"         = TRUE,
+  .quiet       = TRUE 
+)
+
+
+bas_poly <- as.polygons(rast(bas_tif)) %>% 
+  st_as_sf() %>% 
+  st_make_valid()
+
+demi_poly <- as.polygons(rast(demi_tif)) %>% 
+  st_as_sf() %>% 
+  st_make_valid()
+
 
 
 # Définir le nom du fichier GeoPackage de sortie
@@ -132,9 +179,9 @@ writeRaster(
 
 writeRaster(rast(acc_tif),  filename = nom_fichier_gpkg, names = "Accumulation",       filetype = "GPKG",datatype = "FLT4S", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Accumulation"))
 writeRaster(rast(dir_tif),  filename = nom_fichier_gpkg, names = "Direction_Drainage", filetype = "GPKG", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Direction_Drainage"))
-writeRaster(rast(bas_tif),  filename = nom_fichier_gpkg, names = "Bassins",            filetype = "GPKG", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Bassins"))
-writeRaster(rast(demi_tif), filename = nom_fichier_gpkg, names = "Demi_Bassins",       filetype = "GPKG", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Demi_Bassins"))
 
+writeRaster(rast(acc_dep_tif),  filename = nom_fichier_gpkg, names = "Accumulation_Dep", filetype = "GPKG", datatype = "FLT4S", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Accumulation_Dep"))
+writeRaster(rast(dir_dep_tif),  filename = nom_fichier_gpkg, names = "Direction_Dep",    filetype = "GPKG", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Direction_Dep"))
 
 
 # auvegarde des VECTEURS
@@ -142,6 +189,8 @@ st_write(etangs_final, nom_fichier_gpkg, layer = "Etangs", append = TRUE,quiet =
 st_write(routes_final, nom_fichier_gpkg, layer = "Routes", append = TRUE,quiet = TRUE)
 st_write(os_final, nom_fichier_gpkg, layer = "OS", append = TRUE,quiet = TRUE,layer_options = "GEOMETRY_NAME=geom") 
 st_write(bv_selection, nom_fichier_gpkg, layer = "bv", append = TRUE,quiet = TRUE) 
+st_write(bas_poly,  nom_fichier_gpkg, layer = "Bassins_Vecteur",      append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
+st_write(demi_poly, nom_fichier_gpkg, layer = "Demi_Bassins_Vecteur", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 
 #style
 con_dest <- dbConnect(SQLite(), nom_fichier_gpkg)
@@ -161,7 +210,14 @@ style_acc$styleqml <- qml_texte
 style_acc$stylename <- "Style Accumulation"
 style_acc$useasdefault <- 1
 
-styles_complet <- rbind(style_etangs, style_os, style_acc)
+style_acc_dep <- style_acc_modele
+style_acc_dep$f_table_name <- "Accumulation_Dep" 
+style_acc_dep$f_geometry_column <- "" 
+style_acc_dep$styleqml <- qml_texte
+style_acc_dep$stylename <- "Style Accumulation Dep"
+style_acc_dep$useasdefault <- 1
+
+styles_complet <- rbind(style_etangs, style_os, style_acc,style_acc_dep)
 if("id" %in% names(styles_complet)) styles_complet <- styles_complet %>% select(-id)
 
 dbWriteTable(con_dest, "layer_styles", styles_complet, overwrite = TRUE, row.names = FALSE)
