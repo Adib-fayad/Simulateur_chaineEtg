@@ -52,12 +52,12 @@ cnetg$Etang
 
 #tableau QGIS
 etg = read.csv2("Etangs_Chalamont.csv", header = TRUE, dec = ".", sep = ",") %>% 
-  filter(Chaine_etu == "oui")
+  filter(Chaine_etu == "oui") %>%  rename(SURFACE_eau=SURFACE_SI)
 
 
 # Calcul du Vmax
 Prof = 0.70
-etg$Vmax = etg$SURFACE_SI * Prof * 10000
+etg$Vmax = etg$SURFACE_eau * Prof * 10000
 
 # Fusion avec cnetg
 

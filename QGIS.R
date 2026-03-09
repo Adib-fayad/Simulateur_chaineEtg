@@ -59,10 +59,12 @@ etangs_final <- etangs %>%
   mutate(
     CODE_ETANG = 0,                 
     NOM        = stringr::str_extract(nom_p_eau, "(?<=\": \").*(?=\")"),
-    SURFACE_SI = superficie,
+    SURFACE_eau = superficie,
     Exutoire_1 = NA_character_,
+    Exutoire_2 = NA_character_,
+    
   ) %>% 
-  select(nature, insee_com, NOM, SURFACE_SI, CODE_ETANG, Exutoire_1)
+  select(nature, insee_com, NOM, SURFACE_eau, CODE_ETANG, Exutoire_1)
   
 
 # ROUTES

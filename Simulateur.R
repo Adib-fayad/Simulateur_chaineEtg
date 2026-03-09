@@ -28,7 +28,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
+    select(NOM, Surface_BV,SURFACE_eau, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
@@ -38,10 +38,10 @@ if (SITE_CHOISI == "MARLIEUX"){
         RR>0 ~ (ruisselement(RR,CN_jour))/RR,
         RR<= 0 ~ 0
       ),
-      Volume_R = CR*RR*(Surface_BV-SURFACE_SI)*10,
+      Volume_R = CR*RR*(Surface_BV-SURFACE_eau)*10,
       # d=0.1,
       VFuite=round(0.1*3600*24)/1000,
-      Vp_etp = P_ETP*SURFACE_SI*10,
+      Vp_etp = P_ETP*SURFACE_eau*10,
       Vidange= vidange(Vidange,dat),
       peche= Peche(peche,dat),
       Vamont= 0,
@@ -70,7 +70,7 @@ if (SITE_CHOISI == "MARLIEUX"){
 }else if (SITE_CHOISI == "CHALAMONT") {
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
+    select(NOM, Surface_BV,SURFACE_eau, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
     # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
@@ -80,10 +80,10 @@ if (SITE_CHOISI == "MARLIEUX"){
         RR>0 ~ (ruisselement(RR,CN_jour))/RR,
         RR<= 0 ~ 0
       ),
-      Volume_R = CR*RR*(Surface_BV-SURFACE_SI)*10,
+      Volume_R = CR*RR*(Surface_BV-SURFACE_eau)*10,
       # d=0.1,
       VFuite=round(0.1*3600*24)/1000,
-      Vp_etp = P_ETP*SURFACE_SI*10,
+      Vp_etp = P_ETP*SURFACE_eau*10,
       Vidange= vidange(Vidange,dat),
       peche= Peche(peche,dat),
       Vamont= 0,
