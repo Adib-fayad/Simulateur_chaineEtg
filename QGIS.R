@@ -44,13 +44,13 @@ bv <- st_read(path_bv) %>%  st_transform(crs = 2154)
 OS <- st_read(path_OS)
 
 #nrow(bv)
-for (i in 1:2) {
+for (i in which(bv$CODE %in% c("1", "19"))) {
 # On prend le premier BV pour l'exemple
 bv_selection <- bv[i, ] 
 nom_bv <- bv_selection$CODE 
 print(paste("--- Traitement du BV :", nom_bv, "(", i, "/", nrow(bv), ") ---"))
 # Création du Buffer 
-bv_buffer <- st_buffer(bv_selection, dist = 750)
+bv_buffer <- st_buffer(bv_selection, dist = 1500)
 
 # ETANGS
 etangs_final <- etangs %>%
@@ -185,7 +185,7 @@ writeRaster(rast(dir_tif),  filename = nom_fichier_gpkg, names = "Direction_Drai
 writeRaster(rast(acc_dep_tif),  filename = nom_fichier_gpkg, names = "Accumulation_Dep", filetype = "GPKG", datatype = "FLT4S", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Accumulation_Dep"))
 writeRaster(rast(dir_dep_tif),  filename = nom_fichier_gpkg, names = "Direction_Dep",    filetype = "GPKG", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Direction_Dep"))
 
-
+writeRaster(rast(dep_temp),  filename = nom_fichier_gpkg, names = "Masque_Etangs_Dep",    filetype = "GPKG", gdal = c("APPEND_SUBDATASET=YES", "RASTER_TABLE=Masque_Etangs_Dep"))
 # auvegarde des VECTEURS
 st_write(etangs_final, nom_fichier_gpkg, layer = "Etangs", append = TRUE,quiet = TRUE) 
 st_write(routes_final, nom_fichier_gpkg, layer = "Routes", append = TRUE,quiet = TRUE)
