@@ -8,7 +8,7 @@ source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "CHALAMONT"
+SITE_CHOISI <- "MARLIEUX"
 
 # Chargement et nettoyage initial
 # Utilisation de dplyr pour renommer et filtrer en une étape
@@ -68,24 +68,17 @@ tab_etg <- cnetg %>%
 
 
 Vidange_peche <- read_excel("data.xlsx")
-  tab_etg <- tab_etg %>%
-  left_join(Vidange_peche, by = "NOM") %>%
-  mutate(
-    Date_temp = as.Date(paste0("2000", peche)),
-    Jours_vidange = pmin(round(SURFACE_SI),10), 
-    Vidange_temp = Date_temp - Jours_vidange,
-    Vidange = format(Vidange_temp, "-%m-%d")
-  ) %>%
-  select(-Date_temp, -Vidange_temp, -Jours_vidange)
-  
+
+tab_etg <- tab_etg %>%
+  left_join(Vidange_peche, by = "NOM")
+
 head(Vidange_peche)
 
 # Nettoyage
 #rm(etg, cnetg, Prof)
 head(tab_etg)
 
-
-
+library(writexl)
 
 
 if (SITE_CHOISI == "MARLIEUX") {

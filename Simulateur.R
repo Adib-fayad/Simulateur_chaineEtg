@@ -7,7 +7,7 @@ source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "CHALAMONT"
+SITE_CHOISI <- "MARLIEUX"
 # PRÉPARATION DES DONNÉES PLUIE (Calcul de Pant)
 # On calcule d'abord Pant sur le fichier météo (car c'est le même pour tous les étangs)
 # Pant = Pluie Antécédente sur 5 jours (excluant le jour même)
@@ -28,8 +28,8 @@ if (SITE_CHOISI == "MARLIEUX"){
 
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2021:2025)) %>%
-    # Fusion (chaque étang reçoit toute la chronologie météo)
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Exutoire_1,Position,
+           num_range("Assec", 2021:2025), starts_with("peche"), starts_with("Vidange")) %>%    # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
     mutate(
@@ -42,8 +42,25 @@ if (SITE_CHOISI == "MARLIEUX"){
       # d=0.1,
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
-      Vidange= vidange(Vidange,dat),
-      peche= Peche(peche,dat),
+      annee_en_cours = format(dat, "%Y"),
+      
+      Vidange = case_when(
+        annee_en_cours == "2021" & dat == as.Date(Vidange2021) ~ "oui",
+        annee_en_cours == "2022" & dat == as.Date(Vidange2022) ~ "oui",
+        annee_en_cours == "2023" & dat == as.Date(Vidange2023) ~ "oui",
+        annee_en_cours == "2024" & dat == as.Date(Vidange2024) ~ "oui",
+        annee_en_cours == "2025" & dat == as.Date(Vidange2025) ~ "oui",
+        TRUE ~ "non"
+      ),
+      
+      peche = case_when(
+        annee_en_cours == "2021" & dat == as.Date(peche2021) ~ "oui",
+        annee_en_cours == "2022" & dat == as.Date(peche2022) ~ "oui",
+        annee_en_cours == "2023" & dat == as.Date(peche2023) ~ "oui",
+        annee_en_cours == "2024" & dat == as.Date(peche2024) ~ "oui",
+        annee_en_cours == "2025" & dat == as.Date(peche2025) ~ "oui",
+        TRUE ~ "non"
+      ),
       Vamont= 0,
       BF= case_when(
         format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax/2,  
@@ -76,8 +93,8 @@ if (SITE_CHOISI == "MARLIEUX"){
 }else if (SITE_CHOISI == "CHALAMONT") {
   df_bilan <- tab_etg %>%
     # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Vidange,peche, Exutoire_1,Position,num_range("Assec", 2022:2023)) %>%
-    # Fusion (chaque étang reçoit toute la chronologie météo)
+    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Exutoire_1,Position,
+           num_range("Assec", 2022:2023), starts_with("peche"), starts_with("Vidange")) %>%    # Fusion (chaque étang reçoit toute la chronologie météo)
     cross_join(pluvio_calc) %>% 
     # Calcul du CN du jour ligne par ligne
     mutate(
@@ -90,8 +107,19 @@ if (SITE_CHOISI == "MARLIEUX"){
       # d=0.1,
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
-      Vidange= vidange(Vidange,dat),
-      peche= Peche(peche,dat),
+      annee_en_cours = format(dat, "%Y"),
+      
+      Vidange = case_when(
+        annee_en_cours == "2022" & dat == as.Date(Vidange2022) ~ "oui",
+        annee_en_cours == "2023" & dat == as.Date(Vidange2023) ~ "oui",
+        TRUE ~ "non"
+      ),
+      
+      peche = case_when(
+        annee_en_cours == "2022" & dat == as.Date(peche2022) ~ "oui",
+        annee_en_cours == "2023" & dat == as.Date(peche2023) ~ "oui",
+        TRUE ~ "non"
+      ),
       Vamont= 0,
       BF= case_when(
         format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax/2,  
@@ -116,9 +144,16 @@ if (SITE_CHOISI == "MARLIEUX"){
     )
   ) %>% ungroup() %>% select(-annee, -S_Actuel, -S_Futur)
 }
+df_bilan <- df_bilan %>%
+  select(
+    -starts_with("Assec"),         
+    -matches("^peche\\d{4}$"),     
+    -matches("^Vidange\\d{4}$"),  
+    -annee_en_cours                
+  )
 
 liste_etangs <- df_bilan %>% split(.$NOM)
-#liste_etangs[[$VIEUX]] %>% select(dat, RR, Pant, CN_jour)
+liste_etangs[["VIEUX"]] %>% select(dat, RR, Pant, CN_jour,Vidange,peche,Statut_Simu,an) %>% filter(an == 2023)
 
 #On donne juste les deux colonnes à igraph (De qui -> Vers qui)
 liens <- df_bilan %>% 
@@ -207,7 +242,8 @@ for (nom_etang in ordre_topologique) {
 }
 
 
-liste_etangs[["CORVEYZIEUX"]] %>% select(dat, RR, Pant, CN_jour,CR,Volume_R,Vamont,BF)
+liste_etangs[["CORVEYZIEUX"]] %>% select(dat, RR, Pant, CN_jour,CR,Volume_R,Vamont,BF,peche,Vidange) %>% filter(Vidange=="oui")
+
 
 
 
