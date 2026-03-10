@@ -3,6 +3,7 @@ library(terra) # Pour le raster (LiDAR)
 library(dplyr) # Pour la manipulation des tables
 library(RSQLite)
 library(qgisprocess)
+library(readxl)
 
 options(qgisprocess.path = "C:/Users/adfayad/AppData/Local/Programs/OSGeo4W/bin/qgis_process-qgis.bat")
 qgis_configure()
@@ -12,6 +13,7 @@ path_routes <- "SIG/Route/ROUTE_NUMEROTEE_OU_NOMMEE.shp"
 path_lidar  <- "SIG/Dombes_2021_MNT_50cm_L93.cog.tif"
 path_bv     <- "SIG/Hydrologie/bv_intervention.shp"
 path_OS     <- "SIG/OS.gpkg"
+path_assec  <- "SIG/assecevolage/Assec.xlsx"
 dir.create("GPKG_Sortie", showWarnings = FALSE)
 
 ###
@@ -42,15 +44,16 @@ routes <- st_read(path_routes)
 lidar  <- rast(path_lidar)
 bv <- st_read(path_bv) %>%  st_transform(crs = 2154) 
 OS <- st_read(path_OS)
+assec <- read_excel(path_assec)
 
 #nrow(bv)
-for (i in which(bv$CODE %in% c("1", "19"))) {
+for (i in which(bv$CODE %in% c("19"))) {
 # On prend le premier BV pour l'exemple
 bv_selection <- bv[i, ] 
 nom_bv <- bv_selection$CODE 
 print(paste("--- Traitement du BV :", nom_bv, "(", i, "/", nrow(bv), ") ---"))
 # Création du Buffer 
-bv_buffer <- st_buffer(bv_selection, dist = 1500)
+bv_buffer <- st_buffer(bv_selection, dist = 5000)
 
 # ETANGS
 etangs_final <- etangs %>%
@@ -61,7 +64,7 @@ etangs_final <- etangs %>%
     NOM        = stringr::str_extract(nom_p_eau, "(?<=\": \").*(?=\")"),
     SURFACE_eau = superficie,
     Exutoire_1 = NA_character_,
-    Exutoire_2 = NA_character_,
+    Exutoire_2 = NA_character_
     
   ) %>% 
   select(nature, insee_com, NOM, SURFACE_eau, CODE_ETANG, Exutoire_1)
@@ -193,7 +196,7 @@ st_write(os_final, nom_fichier_gpkg, layer = "OS", append = TRUE,quiet = TRUE,la
 st_write(bv_selection, nom_fichier_gpkg, layer = "bv", append = TRUE,quiet = TRUE) 
 st_write(bas_poly,  nom_fichier_gpkg, layer = "Bassins_Vecteur",      append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 st_write(demi_poly, nom_fichier_gpkg, layer = "Demi_Bassins_Vecteur", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
-
+st_write(assec, nom_fichier_gpkg, layer = "Tableau_Assec", append = TRUE, quiet = TRUE)
 #style
 con_dest <- dbConnect(SQLite(), nom_fichier_gpkg)
 
