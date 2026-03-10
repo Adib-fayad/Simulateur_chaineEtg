@@ -13,7 +13,9 @@ path_routes <- "SIG/Route/ROUTE_NUMEROTEE_OU_NOMMEE.shp"
 path_lidar  <- "SIG/Dombes_2021_MNT_50cm_L93.cog.tif"
 path_bv     <- "SIG/Hydrologie/bv_intervention.shp"
 path_OS     <- "SIG/OS.gpkg"
-path_assec  <- "SIG/assecevolage/Assec.xlsx"
+path_assec  <- "SIG/assecevolage/Assec.gpkg"
+path_peche_Vidange  <- "SIG/peche_Vidange/peche_Vidange.gpkg"
+
 dir.create("GPKG_Sortie", showWarnings = FALSE)
 
 ###
@@ -33,9 +35,15 @@ chemin_qml_acc <- "SIG/test.qml"
 qml_texte <- paste(readLines(chemin_qml_acc, warn = FALSE), collapse = "\n")
 style_acc_modele <- style_data[1, ] # On clone la structure
 
+con_src_assec <- dbConnect(SQLite(), path_assec)
+style_modele_assec <- dbGetQuery(con_src_assec, "SELECT * FROM layer_styles WHERE f_table_name = 'departement_01' LIMIT 1")
+dbDisconnect(con_src_assec)
+names(style_modele_assec) <- tolower(names(style_modele_assec))
 
-
-
+con_src_peche <- dbConnect(SQLite(), path_peche_Vidange)
+style_modele_peche <- dbGetQuery(con_src_peche, "SELECT * FROM layer_styles WHERE f_table_name = 'departement_01' LIMIT 1")
+dbDisconnect(con_src_peche)
+names(style_modele_peche) <- tolower(names(style_modele_peche))
 
 # Chargement des couches sources
 # On charge tout une seule fois en mémoire pour gagner du temps
@@ -44,7 +52,8 @@ routes <- st_read(path_routes)
 lidar  <- rast(path_lidar)
 bv <- st_read(path_bv) %>%  st_transform(crs = 2154) 
 OS <- st_read(path_OS)
-assec <- read_excel(path_assec)
+assec <- st_read(path_assec)
+peche_Vidange <- st_read(path_peche_Vidange)
 
 #nrow(bv)
 for (i in which(bv$CODE %in% c("19"))) {
@@ -53,7 +62,7 @@ bv_selection <- bv[i, ]
 nom_bv <- bv_selection$CODE 
 print(paste("--- Traitement du BV :", nom_bv, "(", i, "/", nrow(bv), ") ---"))
 # Création du Buffer 
-bv_buffer <- st_buffer(bv_selection, dist = 5000)
+bv_buffer <- st_buffer(bv_selection, dist = 2000)
 
 # ETANGS
 etangs_final <- etangs %>%
@@ -197,6 +206,8 @@ st_write(bv_selection, nom_fichier_gpkg, layer = "bv", append = TRUE,quiet = TRU
 st_write(bas_poly,  nom_fichier_gpkg, layer = "Bassins_Vecteur",      append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 st_write(demi_poly, nom_fichier_gpkg, layer = "Demi_Bassins_Vecteur", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 st_write(assec, nom_fichier_gpkg, layer = "Tableau_Assec", append = TRUE, quiet = TRUE)
+st_write(peche_Vidange, nom_fichier_gpkg, layer = "Tableau_peche_Vidange", append = TRUE, quiet = TRUE)
+
 #style
 con_dest <- dbConnect(SQLite(), nom_fichier_gpkg)
 
@@ -207,6 +218,15 @@ style_etangs$f_geometry_column <- "geom"
 style_os <- style_os_modele
 style_os$f_table_name <- "OS"
 style_os$f_geometry_column <- "geom"
+
+style_assec <- style_modele_assec
+style_assec$f_table_name <- "Tableau_Assec"
+style_assec$f_geometry_column <- ""
+
+style_peche <- style_modele_peche
+style_peche$f_table_name <- "Tableau_peche_Vidange"
+style_peche$f_geometry_column <- ""
+
 
 style_acc <- style_acc_modele
 style_acc$f_table_name <- "Accumulation"
@@ -222,7 +242,7 @@ style_acc_dep$styleqml <- qml_texte
 style_acc_dep$stylename <- "Style Accumulation Dep"
 style_acc_dep$useasdefault <- 1
 
-styles_complet <- rbind(style_etangs, style_os, style_acc,style_acc_dep)
+styles_complet <- rbind(style_etangs, style_os,style_assec,style_peche, style_acc,style_acc_dep)
 if("id" %in% names(styles_complet)) styles_complet <- styles_complet %>% select(-id)
 
 dbWriteTable(con_dest, "layer_styles", styles_complet, overwrite = TRUE, row.names = FALSE)
