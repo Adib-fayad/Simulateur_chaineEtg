@@ -4,7 +4,7 @@ library(dplyr) # Pour la manipulation des tables
 library(RSQLite)
 library(qgisprocess)
 library(readxl)
-
+try(lapply(dbListConnections(RSQLite::SQLite()), dbDisconnect), silent = TRUE)
 options(qgisprocess.path = "C:/Users/adfayad/AppData/Local/Programs/OSGeo4W/bin/qgis_process-qgis.bat")
 qgis_configure()
 
@@ -36,12 +36,12 @@ qml_texte <- paste(readLines(chemin_qml_acc, warn = FALSE), collapse = "\n")
 style_acc_modele <- style_data[1, ] # On clone la structure
 
 con_src_assec <- dbConnect(SQLite(), path_assec)
-style_modele_assec <- dbGetQuery(con_src_assec, "SELECT * FROM layer_styles WHERE f_table_name = 'departement_01' LIMIT 1")
+style_modele_assec <- dbGetQuery(con_src_assec, "SELECT * FROM layer_styles WHERE f_table_name = 'Assec' LIMIT 1")
 dbDisconnect(con_src_assec)
 names(style_modele_assec) <- tolower(names(style_modele_assec))
 
 con_src_peche <- dbConnect(SQLite(), path_peche_Vidange)
-style_modele_peche <- dbGetQuery(con_src_peche, "SELECT * FROM layer_styles WHERE f_table_name = 'departement_01' LIMIT 1")
+style_modele_peche <- dbGetQuery(con_src_peche, "SELECT * FROM layer_styles WHERE f_table_name = 'peche' LIMIT 1")
 dbDisconnect(con_src_peche)
 names(style_modele_peche) <- tolower(names(style_modele_peche))
 
@@ -52,8 +52,8 @@ routes <- st_read(path_routes)
 lidar  <- rast(path_lidar)
 bv <- st_read(path_bv) %>%  st_transform(crs = 2154) 
 OS <- st_read(path_OS)
-assec <- st_read(path_assec)
-peche_Vidange <- st_read(path_peche_Vidange)
+assec <- st_read(path_assec) %>% st_drop_geometry() 
+peche_Vidange <- st_read(path_peche_Vidange) %>% st_drop_geometry()
 
 #nrow(bv)
 for (i in which(bv$CODE %in% c("19"))) {
@@ -205,9 +205,8 @@ st_write(os_final, nom_fichier_gpkg, layer = "OS", append = TRUE,quiet = TRUE,la
 st_write(bv_selection, nom_fichier_gpkg, layer = "bv", append = TRUE,quiet = TRUE) 
 st_write(bas_poly,  nom_fichier_gpkg, layer = "Bassins_Vecteur",      append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 st_write(demi_poly, nom_fichier_gpkg, layer = "Demi_Bassins_Vecteur", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
-st_write(assec, nom_fichier_gpkg, layer = "Tableau_Assec", append = TRUE, quiet = TRUE)
-st_write(peche_Vidange, nom_fichier_gpkg, layer = "Tableau_peche_Vidange", append = TRUE, quiet = TRUE)
-
+st_write(assec, nom_fichier_gpkg, layer = "Tableau_Assec", append = TRUE, quiet = TRUE, layer_options = c("GEOMETRY_NAME=NONE"))
+st_write(peche_Vidange, nom_fichier_gpkg, layer = "Tableau_peche_Vidange", append = TRUE, quiet = TRUE, layer_options = c("GEOMETRY_NAME=NONE"))
 #style
 con_dest <- dbConnect(SQLite(), nom_fichier_gpkg)
 
@@ -221,11 +220,13 @@ style_os$f_geometry_column <- "geom"
 
 style_assec <- style_modele_assec
 style_assec$f_table_name <- "Tableau_Assec"
-style_assec$f_geometry_column <- ""
+style_assec$f_geometry_column <- NA_character_ 
+style_assec$useasdefault <- 1
 
 style_peche <- style_modele_peche
 style_peche$f_table_name <- "Tableau_peche_Vidange"
-style_peche$f_geometry_column <- ""
+style_peche$f_geometry_column <- NA_character_  
+style_peche$useasdefault <- 1
 
 
 style_acc <- style_acc_modele
@@ -253,11 +254,6 @@ fichiers_a_supprimer <- list.files(path = "GPKG_Sortie", pattern = "^temp_", ful
 file.remove(fichiers_a_supprimer)
 gc()
 }
-
-
-
-
-
 
 
 
