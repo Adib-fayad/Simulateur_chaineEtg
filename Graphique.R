@@ -55,9 +55,9 @@ ggplot(un_etang, aes(x = dat, y = BF)) +
 
 
 # 1. On extrait l'étang ET on filtre directement sur l'année 2022
-un_etang_2022 <- liste_etangs[["SALE"]] %>%
-  filter(format(dat, "%Y") == "2022")
-
+un_etang_2022 <- liste_etangs[["VIEUX"]] %>%
+  filter(format(dat, "%Y") == c(2015,2016,2017,2018))
+#2021,2022,2023,2024
 # 2. On dessine le graphique avec ce nouveau tableau
 ggplot(un_etang_2022, aes(x = dat, y = BF)) +
   geom_line(color = "blue", size = 1) +  # (Note : R te dira peut-être d'utiliser 'linewidth = 1' à la place de 'size' selon ta version)

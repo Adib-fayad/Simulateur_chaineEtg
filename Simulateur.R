@@ -7,7 +7,7 @@ source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "CHALAMONT"
+SITE_CHOISI <- "SAFRAN"
 # PRÉPARATION DES DONNÉES PLUIE (Calcul de Pant)
 # On calcule d'abord Pant sur le fichier météo (car c'est le même pour tous les étangs)
 # Pant = Pluie Antécédente sur 5 jours (excluant le jour même)
@@ -23,137 +23,83 @@ pluvio_calc <- pluvio %>%
   mutate(Pant = replace_na(Pant, 0))
 
 # CRÉATION DU TABLEAU GLOBAL (ETANGS x JOURS)
-
-if (SITE_CHOISI == "MARLIEUX"){
-
-  df_bilan <- tab_etg %>%
-    # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Exutoire_1,Position,
-           num_range("Assec", 2021:2025), starts_with("peche"), starts_with("Vidange")) %>%    # Fusion (chaque étang reçoit toute la chronologie météo)
-    cross_join(pluvio_calc) %>% 
-    # Calcul du CN du jour ligne par ligne
-    mutate(
-      CN_jour = calculer_cn_du_jour(Pant, CNI, CNII, CNIII,dat),
-      CR = case_when(
-        RR>0 ~ (ruisselement(RR,CN_jour))/RR,
-        RR<= 0 ~ 0
-      ),
-      Volume_R = CR*RR*(Surface_BV-SURFACE_eau)*10,
-      # d=0.1,
-      VFuite=round(0.1*3600*24)/1000,
-      Vp_etp = P_ETP*SURFACE_SI*10,
-      annee_en_cours = format(dat, "%Y"),
-      
-      Vidange = case_when(
-        annee_en_cours == "2021" & dat == as.Date(Vidange2021) ~ "oui",
-        annee_en_cours == "2022" & dat == as.Date(Vidange2022) ~ "oui",
-        annee_en_cours == "2023" & dat == as.Date(Vidange2023) ~ "oui",
-        annee_en_cours == "2024" & dat == as.Date(Vidange2024) ~ "oui",
-        annee_en_cours == "2025" & dat == as.Date(Vidange2025) ~ "oui",
-        TRUE ~ "non"
-      ),
-      
-      peche = case_when(
-        annee_en_cours == "2021" & dat == as.Date(peche2021) ~ "oui",
-        annee_en_cours == "2022" & dat == as.Date(peche2022) ~ "oui",
-        annee_en_cours == "2023" & dat == as.Date(peche2023) ~ "oui",
-        annee_en_cours == "2024" & dat == as.Date(peche2024) ~ "oui",
-        annee_en_cours == "2025" & dat == as.Date(peche2025) ~ "oui",
-        TRUE ~ "non"
-      ),
-      Vamont= 0,
-      BF= case_when(
-        format(dat, "%Y-%m-%d") == "2021-01-01" & Assec2021 == "Evolage" ~ Vmax/2,  
-        TRUE ~ 0
-      )) %>% 
-     group_by(NOM, annee = format(dat, "%Y")) %>%     
-    
-    mutate(
-      S_Actuel = case_when(
-        annee == "2021" ~ Assec2021, 
-        annee == "2022" ~ Assec2022,
-        annee == "2023" ~ Assec2023, 
-        annee == "2024" ~ Assec2024,
-        annee == "2025" ~ Assec2025, 
-        TRUE ~ "Evolage"
-      ),
-      S_Futur = case_when(
-        annee == "2021" ~ Assec2022, 
-        annee == "2022" ~ Assec2023,
-        annee == "2023" ~ Assec2024, 
-        annee == "2024" ~ Assec2025,
-        TRUE ~ S_Actuel
-      ),                            
-      Statut_Simu = case_when(
-        peche == "oui" | Vidange == "oui" ~ "Evolage",
-        cumany(peche == "oui") ~ S_Futur,
-        TRUE ~ S_Actuel
-      )
-    ) %>% ungroup() %>% select(-annee, -S_Actuel, -S_Futur)
-}else if (SITE_CHOISI == "CHALAMONT") {
-  df_bilan <- tab_etg %>%
-    # On ne garde que les colonnes utiles 
-    select(NOM, Surface_BV,SURFACE_SI, Vmax, CNI, CNII, CNIII, Exutoire_1,Position,
-           num_range("Assec", 2022:2023), starts_with("peche"), starts_with("Vidange")) %>%    # Fusion (chaque étang reçoit toute la chronologie météo)
-    cross_join(pluvio_calc) %>% 
-    # Calcul du CN du jour ligne par ligne
-    mutate(
-      CN_jour = calculer_cn_du_jour(Pant, CNI, CNII, CNIII,dat),
-      CR = case_when(
-        RR>0 ~ (ruisselement(RR,CN_jour))/RR,
-        RR<= 0 ~ 0
-      ),
-      Volume_R = CR*RR*(Surface_BV-SURFACE_eau)*10,
-      # d=0.1,
-      VFuite=round(0.1*3600*24)/1000,
-      Vp_etp = P_ETP*SURFACE_SI*10,
-      annee_en_cours = format(dat, "%Y"),
-      
-      Vidange = case_when(
-        annee_en_cours == "2022" & dat == as.Date(Vidange2022) ~ "oui",
-        annee_en_cours == "2023" & dat == as.Date(Vidange2023) ~ "oui",
-        TRUE ~ "non"
-      ),
-      
-      peche = case_when(
-        annee_en_cours == "2022" & dat == as.Date(peche2022) ~ "oui",
-        annee_en_cours == "2023" & dat == as.Date(peche2023) ~ "oui",
-        TRUE ~ "non"
-      ),
-      Vamont= 0,
-      BF= case_when(
-        format(dat, "%Y-%m-%d") == "2022-01-01" & Assec2022 == "Evolage" ~ Vmax/2,  
-        TRUE ~ 0
-      )
-    ) %>%
-  group_by(NOM, annee = format(dat, "%Y")) %>%
+# On extrait les colonnes avec des années et on les transforme en lignes
+table_dates <- tab_etg %>%
+  select(NOM, starts_with("Assec"), starts_with("Vidange"), starts_with("peche")) %>%
+  pivot_longer(
+    cols = -NOM,
+    names_to = c(".value", "annee"),       # Sépare le mot (Assec) de l'année (2010)
+    names_pattern = "([A-Za-z]+)(\\d{4})"  # Ex: "Vidange2010" devient "Vidange", annee "2010"
+  ) %>%
+  arrange(NOM, annee) %>%
+  group_by(NOM) %>%
   mutate(
-    S_Actuel = case_when(
-      annee == "2022" ~ Assec2022, 
-      annee == "2023" ~ Assec2023, 
-      TRUE ~ "Evolage"
+    # Le statut futur est l'Assec de l'année suivante (ou l'actuel si c'est la fin)
+    Assec_Futur = coalesce(lead(assec), assec) 
+  ) %>%
+  ungroup()
+
+# ====================================================================
+# ÉTAPE 2 : La création unique du Bilan (Valable pour TOUS les sites)
+# ====================================================================
+df_bilan <- tab_etg %>%
+  # 1. On ne garde que les caractéristiques fixes de l'étang
+  select(NOM, Surface_BV, SURFACE_eau, SURFACE_eau, Vmax, CNI, CNII, CNIII, Exutoire_1, Position) %>%
+  
+  # 2. On croise avec la météo choisie plus haut (pluvio_calc)
+  cross_join(pluvio_calc) %>%
+  
+  # 3. On extrait l'année météo en cours
+  mutate(annee = format(dat, "%Y")) %>%
+  
+  # 4. On rattache automatiquement les bonnes dates de l'année !
+  left_join(table_dates, by = c("NOM", "annee")) %>%
+  
+  # 5. Calculs hydrologiques
+  mutate(
+    CN_jour = calculer_cn_du_jour(Pant, CNI, CNII, CNIII, dat),
+    CR = case_when(
+      RR > 0 ~ (ruisselement(RR, CN_jour)) / RR,
+      TRUE ~ 0
     ),
-    S_Futur = case_when(
-      annee == "2022" ~ Assec2023, 
-      TRUE ~ S_Actuel
-    ),
+    Volume_R = CR * RR * (Surface_BV - SURFACE_eau) * 10,
+    VFuite = round(0.1 * 3600 * 24) / 1000,
+    Vp_etp = P_ETP * SURFACE_eau * 10,
+    
+    # Validation des dates de vidange et pêche
+    Vidange = if_else(dat == as.Date(Vidange), "oui", "non", missing = "non"),
+    peche   = if_else(dat == as.Date(peche), "oui", "non", missing = "non"),
+    
+    Vamont = 0,
+    
+    # Initialisation pour le tout premier jour de la simulation 
+    BF = case_when(
+      dat == as.Date("2010-01-01") & assec == "Evolage" ~ Vmax / 2, 
+      TRUE ~ 0
+    )
+  ) %>% 
+  
+  # 6. Détermination du statut (Assec / Evolage)
+  group_by(NOM, annee) %>%
+  mutate(
     Statut_Simu = case_when(
       peche == "oui" | Vidange == "oui" ~ "Evolage",
-      cumany(peche == "oui") ~ S_Futur,
-      TRUE ~ S_Actuel
+      cumany(peche == "oui") ~ Assec_Futur,
+      TRUE ~ assec
     )
-  ) %>% ungroup() %>% select(-annee, -S_Actuel, -S_Futur)
-}
-df_bilan <- df_bilan %>%
-  select(
-    -starts_with("Assec"),         
-    -matches("^peche\\d{4}$"),     
-    -matches("^Vidange\\d{4}$"),  
-    -annee_en_cours                
-  )
+  ) %>% 
+  ungroup() %>%
+  
+  # Nettoyage des colonnes temporaires
+  select(-annee, -assec, -Assec_Futur)
+
+# ====================================================================
+# FIN DU REMPLACEMENT - Tu peux laisser la suite de ton code !
+# ====================================================================
+
 
 liste_etangs <- df_bilan %>% split(.$NOM)
-liste_etangs[["VIEUX"]] %>% select(dat, RR, Pant, CN_jour,Vidange,peche,Statut_Simu,an) %>% filter(an == 2023)
+
 
 #On donne juste les deux colonnes à igraph (De qui -> Vers qui)
 liens <- df_bilan %>% 
@@ -172,7 +118,7 @@ ordre_topologique <- names(topo_sort(reseau, mode = "out"))
 
 
 for (nom_etang in ordre_topologique) {
-  
+  print(paste("Calcul de l'étang :", nom_etang))
   etangs_calcule <- liste_etangs[[nom_etang]]
   Stockage_Vamont <- numeric(nrow(etangs_calcule))
   
@@ -196,7 +142,7 @@ for (nom_etang in ordre_topologique) {
         if (delta_T > 0) {
           Volume_Etang <- etangs_calcule$Vmax[t0]
           
-          Surface_ha <- etangs_calcule$SURFACE_SI[t0] 
+          Surface_ha <- etangs_calcule$SURFACE_eau[t0] 
           
           Vol_1ha_jour <- Volume_Etang / Surface_ha
           
@@ -246,7 +192,7 @@ liste_etangs[["CORVEYZIEUX"]] %>% select(dat, RR, Pant, CN_jour,CR,Volume_R,Vamo
 
 
 liste_etangs[["CORVEYZIEUX"]] %>% 
-  select(dat,SURFACE_SI, RR, Pant, CN_jour, CR, Volume_R, Vamont, BF, peche, Vidange, Vol_Vidange_Jour) %>% 
+  select(dat,SURFACE_eau, RR, Pant, CN_jour, CR, Volume_R, Vamont, BF, peche, Vidange, Vol_Vidange_Jour) %>% 
   filter(between(dat, as.Date("2023-10-30"), as.Date("2023-11-16")))
 
 
