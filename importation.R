@@ -70,8 +70,17 @@ tab_etg <- cnetg %>%
 Vidange_peche <- read_excel("data.xlsx")
 
 tab_etg <- tab_etg %>%
-  left_join(Vidange_peche, by = "NOM")
+  left_join(Vidange_peche, by = "NOM") %>%
+  mutate(
+    jours_vidange = ceiling(SURFACE_SI),
+    Vidange2021 = as.Date(peche2021) - jours_vidange,
+    Vidange2022 = as.Date(peche2022) - jours_vidange,
+    Vidange2023 = as.Date(peche2023) - jours_vidange,
+    Vidange2024 = as.Date(peche2024) - jours_vidange,
+    Vidange2025 = as.Date(peche2025) - jours_vidange
+  )
 
+head(tab_etg)
 head(Vidange_peche)
 
 # Nettoyage

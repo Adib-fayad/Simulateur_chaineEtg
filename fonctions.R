@@ -44,7 +44,7 @@ ruisselement <- function(RR, CN_jour) {
 # }
 
 
-Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Volume_Vidange_Jour){
+Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Volume_Vidange_Jour,Peche_Jour){
   
   Eau_Dispo = BF + Volume_R + Vamont
   
@@ -54,7 +54,7 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Vol
   Vsortant = Fuite_Reelle 
   
   # L'ÉVAPORATION
-  if (Statut_Assec == "Assec") {
+  if (Statut_Assec == "Assec" || Peche_Jour == "oui") {
     Evap_Reelle = max(0, Vp_etp)
   } else {
     if (Vp_etp < 0) {
@@ -65,14 +65,35 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Vol
   }
   Eau_Dispo = Eau_Dispo + Evap_Reelle 
   
-  # GESTION DU NIVEAU ET DE LA VIDANGE
-  if (Volume_Vidange_Jour > 0) {
+  # jour de peche on vide tt l'étang
+  if (Peche_Jour == "oui") {
+    Vsortant = Vsortant + Eau_Dispo
+    BF = 0
     
-    Volume_reel_vide = min(Volume_Vidange_Jour, max(0, Eau_Dispo))
+    # si autre et si on a un volume vidanger 
+  } else if (Volume_Vidange_Jour > 0) {
+    
+    # L'objectif d est de faire baisser le volume par rapport à HIER
+    
+    Objectif_Volume = max(0, BF - Volume_Vidange_Jour)
+    
+    # On évacue tout ce qui dépasse cet objectif (le quota + la pluie + l'amont)
+    if (Eau_Dispo > Objectif_Volume) {
+      Volume_a_vider = Eau_Dispo - Objectif_Volume
+      # on évacue AU MOINS notre quota 
+      Volume_theorique = max(Volume_a_vider, Volume_Vidange_Jour)
+    } else {
+      # Si l'étang est déjà en dessous de l'objectif, on maintient le quota habituel
+      Volume_theorique = Volume_Vidange_Jour
+    }
+    
+    Volume_reel_vide = min(Volume_theorique, max(0, Eau_Dispo))
+    
+    # On met à jour les stocks
     Vsortant = Vsortant + Volume_reel_vide
     Eau_Dispo = Eau_Dispo - Volume_reel_vide
     
-    # Sécurité au cas où il pleut énormément pendant la vidange
+    # Sécurité (si pluie extrême)
     if (Eau_Dispo > Vmax) {
       Surplus = Eau_Dispo - Vmax
       Vsortant = Vsortant + Surplus
@@ -81,13 +102,12 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Vol
       BF = Eau_Dispo
     }
     
-    # La vidange est finie, et l'étang est officiellement en Assec
+    # CAS 3 : L'étang est vide (Assec) - Il laisse tout passer
   } else if (Statut_Assec == "Assec") {
-    # L'étang ne garde rien
     Vsortant = Vsortant + Eau_Dispo
     BF = 0
     
-    #L'étang est en Evolage il se remplit ou déborde
+    # CAS 4 : L'étang est en culture (Evolage) - Il se remplit
   } else {
     if (Eau_Dispo > Vmax) {
       Surplus = Eau_Dispo - Vmax
@@ -97,6 +117,7 @@ Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Vol
       BF = Eau_Dispo
     }
   } 
+  
   return(list(BF = BF, Vsortant = Vsortant))
 }
   

@@ -172,41 +172,39 @@ ordre_topologique <- names(topo_sort(reseau, mode = "out"))
 
 
 for (nom_etang in ordre_topologique) {
-  etangs_calcule<- liste_etangs[[nom_etang]]
   
+  etangs_calcule <- liste_etangs[[nom_etang]]
   Stockage_Vamont <- numeric(nrow(etangs_calcule))
   
-  #calcule boucle exponetielle
   etangs_calcule$Vol_Vidange_Jour <- 0
-  #numero des ligne de vidange et peche pour calculer le nbre de jours
+  
+  # Repérage des jours clés
   lignes_vidange <- which(etangs_calcule$Vidange == "oui")
   lignes_peche <- which(etangs_calcule$peche == "oui")
   
+  #VIDANGE LINÉAIRE (1 ha/jour)
   if (length(lignes_vidange) > 0) {
-    # On parcourt chaque date d'ouverture de bonde
     for (t0 in lignes_vidange) {
       
-      # On cherche uniquement les pêches qui sont APRÈS l'ouverture
       peches_futures <- lignes_peche[lignes_peche > t0]
       
       if (length(peches_futures) > 0) {
         
-        tfin <- peches_futures[1] # On prend le jour de pêche le plus proche
+        tfin <- peches_futures[1]
         delta_T <- tfin - t0
         
         if (delta_T > 0) {
-          # Paramètres de la courbe de tarissement
-          # On prend par exemple 30% du Vmax pour le premier jour de vidange, et 5% pour le dernier
-          Volume_Etang = etangs_calcule$Vmax[t0]
-          Qmax <- Volume_Etang * 0.30  
-          Qmin <- Volume_Etang * 0.05
+          Volume_Etang <- etangs_calcule$Vmax[t0]
           
-          # Calcul de la chute exponentielle
-          k <- -(1 / delta_T) * log(Qmin / Qmax)
-          jours_ecoules <- 0:delta_T
+          Surface_ha <- etangs_calcule$SURFACE_SI[t0] 
           
-          # On injecte la belle courbe lisse sur les X jours
-          etangs_calcule$Vol_Vidange_Jour[t0:tfin] <- Qmax * exp(-k * jours_ecoules)
+          Vol_1ha_jour <- Volume_Etang / Surface_ha
+          
+          jours_pour_vider <- ceiling(Surface_ha)
+          jours_effectifs <- min(delta_T, jours_pour_vider)
+          
+          jours_actifs <- t0:(t0 + jours_effectifs - 1)
+          etangs_calcule$Vol_Vidange_Jour[jours_actifs] <- Vol_1ha_jour
         }
       }
     }
@@ -223,7 +221,8 @@ for (nom_etang in ordre_topologique) {
       Vamont = etangs_calcule$Vamont[jour],
       VFuite = etangs_calcule$VFuite[jour], 
       Statut_Assec = statut_du_jour,
-      Volume_Vidange_Jour = etangs_calcule$Vol_Vidange_Jour[jour]
+      Volume_Vidange_Jour = etangs_calcule$Vol_Vidange_Jour[jour],
+      Peche_Jour = etangs_calcule$peche[jour]
     )
     
     etangs_calcule$BF[jour] = resultat$BF
@@ -242,11 +241,13 @@ for (nom_etang in ordre_topologique) {
 }
 
 
-liste_etangs[["CORVEYZIEUX"]] %>% select(dat, RR, Pant, CN_jour,CR,Volume_R,Vamont,BF,peche,Vidange) %>% filter(Vidange=="oui")
+liste_etangs[["CORVEYZIEUX"]] %>% select(dat, RR, Pant, CN_jour,CR,Volume_R,Vamont,BF,peche,Vidange,Vol_Vidange_Jour) %>% filter(BF==0)
 
 
 
-
+liste_etangs[["CORVEYZIEUX"]] %>% 
+  select(dat,SURFACE_SI, RR, Pant, CN_jour, CR, Volume_R, Vamont, BF, peche, Vidange, Vol_Vidange_Jour) %>% 
+  filter(between(dat, as.Date("2023-10-30"), as.Date("2023-11-16")))
 
 
 df<- df_bilan %>% select(,c("NOM","Vidange","dat")) %>% filter(Vidange=="oui")
