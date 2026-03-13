@@ -49,7 +49,7 @@ bv_selection <- bv[i, ]
 nom_bv <- bv_selection$CODE 
 print(paste("--- Traitement du BV :", nom_bv, "(", i, "/", nrow(bv), ") ---"))
 # Création du Buffer 
-bv_buffer <- st_buffer(bv_selection, dist = 2000)
+bv_buffer <- st_buffer(bv_selection, dist = 0)
 
 # ETANGS
 etangs_final <- etangs %>%
@@ -94,7 +94,7 @@ dir_tif  <- paste0("GPKG_Sortie/temp_dir_", nom_bv, ".tif")
 bas_tif  <- paste0("GPKG_Sortie/temp_bas_", nom_bv, ".tif")
 demi_tif <- paste0("GPKG_Sortie/temp_demi_", nom_bv, ".tif")
 
-seuil_pixels <- (as.numeric(bv_selection$SURFACE) * 10000) / 25
+seuil_pixels <- ((as.numeric(bv_selection$SURFACE) * 10000) / 25)
 
 
 
