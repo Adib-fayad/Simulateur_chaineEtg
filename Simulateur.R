@@ -7,7 +7,7 @@ source("fonctions.R")
 #################################
 #Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "MARLIEUX"
+SITE_CHOISI <- "CHALAMONT"
 # PRÉPARATION DES DONNÉES PLUIE (Calcul de Pant)
 # On calcule d'abord Pant sur le fichier météo (car c'est le même pour tous les étangs)
 # Pant = Pluie Antécédente sur 5 jours (excluant le jour même)
@@ -38,7 +38,7 @@ if (SITE_CHOISI == "MARLIEUX"){
         RR>0 ~ (ruisselement(RR,CN_jour))/RR,
         RR<= 0 ~ 0
       ),
-      Volume_R = CR*RR*(Surface_BV-SURFACE_SI)*10,
+      Volume_R = CR*RR*(Surface_BV-SURFACE_eau)*10,
       # d=0.1,
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
@@ -103,7 +103,7 @@ if (SITE_CHOISI == "MARLIEUX"){
         RR>0 ~ (ruisselement(RR,CN_jour))/RR,
         RR<= 0 ~ 0
       ),
-      Volume_R = CR*RR*(Surface_BV-SURFACE_SI)*10,
+      Volume_R = CR*RR*(Surface_BV-SURFACE_eau)*10,
       # d=0.1,
       VFuite=round(0.1*3600*24)/1000,
       Vp_etp = P_ETP*SURFACE_SI*10,
