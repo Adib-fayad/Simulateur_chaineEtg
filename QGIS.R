@@ -42,14 +42,15 @@ lidar  <- rast(path_lidar)
 bv <- st_read(path_bv) %>%  st_transform(crs = 2154) 
 OS <- st_read(path_OS)
 
+indices_bv <- which(bv$CODE %in% c(1, 19))
 
 #nrow(bv)
-for (i in which(bv$CODE %in% c(19,1))) {
+for (i in indices_bv) {
 bv_selection <- bv[i, ] 
 nom_bv <- bv_selection$CODE 
 print(paste("--- Traitement du BV :", nom_bv, "(", i, "/", nrow(bv), ") ---"))
 # Création du Buffer 
-bv_buffer <- st_buffer(bv_selection, dist = 0)
+bv_buffer <- st_buffer(bv_selection, dist = 2000)
 
 # ETANGS
 etangs_final <- etangs %>%
@@ -61,9 +62,8 @@ etangs_final <- etangs %>%
     SURFACE_eau = superficie,
     Exutoire_1 = NA_character_,
     Exutoire_2 = NA_character_
-    
   ) %>% 
-  select(nature, insee_com, NOM, SURFACE_eau, CODE_ETANG, Exutoire_1,Exutoire_2)
+  select(CODE_ETANG,NOM,nature,insee_com,SURFACE_eau,Exutoire_1,Exutoire_2,Profondeur)
 
 
 # ROUTES
@@ -121,6 +121,9 @@ demi_poly <- as.polygons(rast(demi_tif)) %>%
 
 
 
+
+
+
 # Définir le nom du fichier GeoPackage de sortie
 nom_fichier_gpkg <- paste0("GPKG_Sortie/BV_", nom_bv, "_Complet.gpkg")
 if (file.exists(nom_fichier_gpkg)) file.remove(nom_fichier_gpkg)
@@ -151,8 +154,8 @@ st_write(etangs_final, nom_fichier_gpkg, layer = "Etangs", append = TRUE, quiet 
 st_write(routes_final, nom_fichier_gpkg, layer = "Routes", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 st_write(os_final, nom_fichier_gpkg, layer = "OS", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom") 
 st_write(bv_selection, nom_fichier_gpkg, layer = "bv_life", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom") 
-st_write(bas_poly,  nom_fichier_gpkg, layer = "Bassins_Versant", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
-st_write(demi_poly, nom_fichier_gpkg, layer = "Demi_Bassins", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
+st_write(bas_poly,  nom_fichier_gpkg, layer = "Bassins_Versant_2000", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
+st_write(demi_poly, nom_fichier_gpkg, layer = "Demi_Bassins_2000", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 
 
 
@@ -258,10 +261,67 @@ dbDisconnect(con_cible)
 print("pération terminée avec succès!")
 
 
+liste_distance <- c(0, 1500, 5000)
 
-
-
-
-
+for (i in indices_bv) {
+  
+  bv_selection <- bv[i, ] 
+  nom_bv <- bv_selection$CODE 
+  
+  fichier_cible <- paste0("GPKG_Sortie/BV_", nom_bv, "_Complet.gpkg")
+  
+  print(paste("Traitement des distances pour le BV :", nom_bv))
+  
+  for (distance in liste_distance) {
+  
+    print(paste("   - GRASS Hydrologie | Distance :", distance))
+    
+    bv_buffer <- st_buffer(bv_selection, dist = distance)
+    
+    Lidar_2 <- crop(lidar, bv_buffer)
+    lidar_5m_2 <- aggregate(Lidar_2, fact = 10, fun = "mean")
+    
+    mnt_temp_2 <- "GPKG_Sortie/temp_mnt.tif"
+    writeRaster(lidar_5m_2, mnt_temp_2, overwrite = TRUE)
+    
+    # Préparation des chemins de sortie 
+    bas_tif  <- paste0("GPKG_Sortie/temp_bas_", nom_bv, ".tif")
+    demi_tif <- paste0("GPKG_Sortie/temp_demi_", nom_bv, ".tif")
+    
+    seuil_pixels <- ((as.numeric(bv_selection$SURFACE) * 10000) / 25)
+    
+    qgis_run_algorithm(
+      "grass:r.watershed",
+      elevation    = mnt_temp_2,
+      threshold    = seuil_pixels,
+      basin        = bas_tif,
+      half_basin   = demi_tif,
+      "-s"         = TRUE,
+      .quiet       = TRUE 
+    )
+    
+    bas_poly <- as.polygons(rast(bas_tif)) %>% 
+      st_as_sf() %>% 
+      st_make_valid() %>%
+      rename(id_bassin = 1) %>% 
+      mutate(Code_BV = nom_bv)
+    
+    demi_poly <- as.polygons(rast(demi_tif)) %>% 
+      st_as_sf() %>% 
+      st_make_valid() %>%
+      rename(id_bassin = 1) %>%
+      mutate(Code_BV = nom_bv)
+    
+    nom_couche_bas <- paste0("Bassins_Versant_", distance)
+    nom_couche_demi <- paste0("Demi_Bassins_", distance)
+    
+    # Écriture dans le BON fichier cible
+    st_write(bas_poly, dsn = fichier_cible, layer = nom_couche_bas, append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
+    st_write(demi_poly, dsn = fichier_cible, layer = nom_couche_demi, append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
+    
+    # Nettoyage des fichiers temporaires pour ne pas encombrer le disque
+    file.remove(bas_tif, demi_tif, mnt_temp_2)
+  }
+}
 
 
