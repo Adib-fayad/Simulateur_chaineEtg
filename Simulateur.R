@@ -5,9 +5,7 @@ library(scales)
 library(ggraph)
 source("fonctions.R")
 #################################
-#Choix des donnee meteo CHALAMONT OU MARLIEUX
 
-SITE_CHOISI <- "SAFRAN"
 # PRÉPARATION DES DONNÉES PLUIE (Calcul de Pant)
 # On calcule d'abord Pant sur le fichier météo (car c'est le même pour tous les étangs)
 # Pant = Pluie Antécédente sur 5 jours (excluant le jour même)
