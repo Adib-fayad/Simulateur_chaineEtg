@@ -99,8 +99,9 @@ if (SITE_CHOISI == "MARLIEUX") {
   
   #  Chargement Pluvio (Marlieux)
   fichiers_meteo <- c(
-    "meteo/SAFRAN/QUOT_SIM2_2010-2019.CSV", 
-    "meteo/SAFRAN/QUOT_SIM2_previous-2020-202602.csv"
+    "meteo/Q_01_previous-1950-2024_RR-T-Vent.CSV",
+    "meteo/Q_01_latest-2025-2026_RR-T-Vent.CSV"
+    
   )
   
   meteo <- fichiers_meteo %>%
