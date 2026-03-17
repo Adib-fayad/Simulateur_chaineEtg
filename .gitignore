@@ -4,3 +4,14 @@
 .httr-oauth
 .DS_Store
 .quarto
+# ----------------------------------
+# Fichiers temporaires et de données
+# ----------------------------------
+*.csv
+*.CSV
+*.tif
+*.TIF
+*.gpkg
+*.png
+GPKG_Sortie/
+temp_*/
