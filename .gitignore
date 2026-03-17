@@ -13,5 +13,8 @@
 *.TIF
 *.gpkg
 *.png
+*.xlsx
+*.docx
 GPKG_Sortie/
 temp_*/
+meteo/
