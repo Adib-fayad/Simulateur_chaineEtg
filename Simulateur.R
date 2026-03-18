@@ -91,9 +91,6 @@ df_bilan <- tab_etg %>%
   # Nettoyage des colonnes temporaires
   select(-annee, -assec, -Assec_Futur)
 
-# ====================================================================
-# FIN DU REMPLACEMENT - Tu peux laisser la suite de ton code !
-# ====================================================================
 
 
 liste_etangs <- df_bilan %>% split(.$NOM)
@@ -113,7 +110,12 @@ ordre_topologique <- names(topo_sort(reseau, mode = "out"))
 
 ## boucle de calcule BF
 
-
+Volume_Total_Exutoire_BV <- data.frame(
+  # On prend les dates du premier étang de la liste 
+  dat = liste_etangs[[1]]$dat, 
+  # On crée autant de zéros qu'il y a de jours de simulation
+  Volume_Riviere = rep(0, nrow(liste_etangs[[1]])) 
+)
 
 for (nom_etang in ordre_topologique) {
   print(paste("Calcul de l'étang :", nom_etang))
@@ -177,11 +179,16 @@ for (nom_etang in ordre_topologique) {
   
   exutoire <- etangs_calcule$Exutoire_1[1]
   
-  if (!is.na(exutoire) && exutoire != "OUTPUT") {
-    
-    liste_etangs[[exutoire]]$Vamont <- liste_etangs[[exutoire]]$Vamont + Stockage_Vamont
+  if (!is.na(exutoire)) {
+    if (exutoire != "OUTPUT") {
+      # L'eau part dans l'étang suivant 
+      liste_etangs[[exutoire]]$Vamont <- liste_etangs[[exutoire]]$Vamont + Stockage_Vamont
+      
+    } else {
+      # L'eau part dans la rivière ! On l'ajoute au collecteur global
+      Volume_Total_Exutoire_BV$Volume_Riviere <- Volume_Total_Exutoire_BV$Volume_Riviere + Stockage_Vamont
+    }
   }
-  
 }
 
 
