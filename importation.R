@@ -52,15 +52,14 @@ cnetg$Etang
 
 
 #tableau QGIS
-etg = read.csv2("Etangs_Chalamont.csv", header = TRUE, dec = ".", sep = ",") %>% 
+etg = read.csv2("Etangs_Chalamont.csv", header = TRUE, dec = ",", sep = ";") %>% 
   filter(Chaine_etu == "oui") %>%  rename(SURFACE_eau=SURFACE_SI) %>% select(-num_range("Assec", 2021:2025))
 ASSEC = read.csv2("ASSEC_Final_2010_2025.csv",header = TRUE, sep = ";") %>% select(-Exutoire_1,-OBJECTID)
 
 etg = ASSEC %>%  inner_join(etg, by ="NOM")
 
 # Calcul du Vmax
-Prof = 0.70
-etg$Vmax = etg$SURFACE_eau * Prof * 10000
+etg$Vmax = etg$SURFACE_eau * etg$Profondeur_m * 10000
 
 # Fusion avec cnetg
 
@@ -237,6 +236,5 @@ if (SITE_CHOISI == "MARLIEUX") {
 
 
 
-
-
-
+pluvio <- read.csv2("Meteo_SAFRAN_Prete_A_L_Emploi.csv") %>%
+  mutate(dat = as.Date(dat))
