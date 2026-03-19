@@ -35,32 +35,36 @@ meteo_mar <- fichiers_meteo_mar %>%
   ) %>% select(dat, RR_MAR) %>% drop_na(dat)
 
 # ---> SAFRAN (Maille spécifique)
-fichiers_meteo_saf <- c(
-  "meteo/SAFRAN/QUOT_SIM2_2010-2019.CSV", 
-  "meteo/SAFRAN/QUOT_SIM2_previous-2020-202602.csv"
-)
-print("Chargement de SAFRAN...")
-coordonnees <- read.csv("meteo/SAFRAN/centro_BV.csv", header = TRUE, sep = ",") %>% filter(CODE == 2)
-X <- coordonnees$LAMBX[1]
-Y <- coordonnees$LAMBY[1]
+# fichiers_meteo_saf <- c(
+#   "meteo/SAFRAN/QUOT_SIM2_2010-2019.CSV", 
+#   "meteo/SAFRAN/QUOT_SIM2_previous-2020-202602.csv"
+# )
+ print("Chargement de SAFRAN...")
+# coordonnees <- read.csv("meteo/SAFRAN/centro_BV.csv", header = TRUE, sep = ",") %>% filter(CODE == 2)
+# X <- coordonnees$LAMBX[1]
+# Y <- coordonnees$LAMBY[1]
+# 
+# meteo_saf_brut <- open_dataset(fichiers_meteo_saf[2], format = "csv", delimiter = ";") %>%
+#   filter(LAMBX >= X - 40 & LAMBX <= X + 40 & LAMBY >= Y - 40 & LAMBY <= Y + 40) %>%
+#   collect() 
+# 
+# cases_capturees <- meteo_saf_brut %>%
+#   select(LAMBX, LAMBY) %>% distinct() %>%
+#   mutate(distance = sqrt((LAMBX - X)^2 + (LAMBY - Y)^2)) %>% arrange(distance)
+# 
+# meteo_saf <- meteo_saf_brut %>%
+#   filter(LAMBX == cases_capturees$LAMBX[1] & LAMBY == cases_capturees$LAMBY[1]) %>%
+#   rename(RR_SAF = PRELIQ) %>%
+#   mutate(
+#     dat = as.Date(as.character(DATE), format="%Y%m%d"),
+#     RR_SAF = as.numeric(as.character(RR_SAF))
+#   ) %>% select(dat, RR_SAF)
 
-meteo_saf_brut <- open_dataset(fichiers_meteo_saf[2], format = "csv", delimiter = ";") %>%
-  filter(LAMBX >= X - 40 & LAMBX <= X + 40 & LAMBY >= Y - 40 & LAMBY <= Y + 40) %>%
-  collect() 
-
-cases_capturees <- meteo_saf_brut %>%
-  select(LAMBX, LAMBY) %>% distinct() %>%
-  mutate(distance = sqrt((LAMBX - X)^2 + (LAMBY - Y)^2)) %>% arrange(distance)
-
-meteo_saf <- meteo_saf_brut %>%
-  filter(LAMBX == cases_capturees$LAMBX[1] & LAMBY == cases_capturees$LAMBY[1]) %>%
-  rename(RR_SAF = PRELIQ) %>%
-  mutate(
-    dat = as.Date(as.character(DATE), format="%Y%m%d"),
-    RR_SAF = as.numeric(as.character(RR_SAF))
-  ) %>% select(dat, RR_SAF)
-
-
+meteo_saf <- read.csv2("meteo/SAFRAN/Meteo_SAFRAN_Prete_A_L_Emploi.csv") %>%
+  mutate(dat = as.Date(dat)) %>%
+  # On renomme RR en RR_SAF pour que la suite de ton code fonctionne !
+  rename(RR_SAF = RR) %>%
+  select(dat, RR_SAF)
 # ====================================================================
 # 2. FUSION ET PRÉPARATION DES DONNÉES POUR GGPLOT
 # ====================================================================
