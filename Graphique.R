@@ -82,4 +82,50 @@ print(g_exutoire)
 # Sauvegarde du graphique de l'exutoire
 ggsave("Export_Graphes/Exutoire_Bassin_Versant.jpg", plot = g_exutoire, width = 10, height = 6, dpi = 300)
 
-print("✅ Tous les graphiques ont été générés et sauvegardés avec succès dans le dossier 'Export_Graphes' !")
+print("Tous les graphiques ont été générés et sauvegardés avec succès dans le dossier 'Export_Graphes' !")
+
+
+
+
+
+
+
+#################################################################
+
+
+etang_a_tracer <- "CORVEYZIEUX"         
+date_debut     <- as.Date("2023-01-01") 
+date_fin       <- as.Date("2023-12-31") 
+
+# ====================================================================
+# 2. GÉNÉRATION DU GRAPHIQUE CIBLÉ
+# ====================================================================
+
+# On extrait juste cet étang et on coupe aux dates voulues
+df_etang_zoom <- liste_etangs[[etang_a_tracer]] %>%
+  filter(dat >= date_debut & dat <= date_fin)
+
+# On dessine la courbe
+g_zoom <- ggplot(df_etang_zoom, aes(x = dat, y = BF)) +
+  geom_line(color = "dodgerblue4", linewidth = 1) + 
+  
+  # Formatage des nombres de l'axe Y
+  scale_y_continuous(labels = scales::comma_format(big.mark = " ", decimal.mark = ",")) +
+  
+  # Formatage de l'axe X (ajustement auto des dates)
+  scale_x_date(date_labels = "%d %b %Y") + 
+  
+  labs(
+    title = paste("Diagnostic Rapide : Étang", etang_a_tracer),
+    subtitle = paste("Période du", format(date_debut, "%d/%m/%Y"), "au", format(date_fin, "%d/%m/%Y")),
+    x = "Date", 
+    y = "Volume de l'eau (m³)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold", size = 14, color = "dodgerblue4")
+  )
+
+# Affichage direct dans RStudio
+print(g_zoom)
