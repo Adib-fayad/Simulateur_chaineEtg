@@ -204,5 +204,3 @@ liste_etangs[["CORVEYZIEUX"]] %>%
 df<- df_bilan %>% select(,c("NOM","Vidange","dat")) %>% filter(Vidange=="oui")
 
 
-pluvio <- read.csv2("Meteo_SAFRAN_Prete_A_L_Emploi.csv") %>%
-  mutate(dat = as.Date(dat))

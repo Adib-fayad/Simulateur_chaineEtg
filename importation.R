@@ -236,5 +236,5 @@ if (SITE_CHOISI == "MARLIEUX") {
 
 
 
-pluvio <- read.csv2("Meteo_SAFRAN_Prete_A_L_Emploi.csv") %>%
+pluvio <- read.csv2("meteo/SAFRAN/Meteo_SAFRAN_Prete_A_L_Emploi.csv") %>%
   mutate(dat = as.Date(dat))
