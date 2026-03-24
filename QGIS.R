@@ -13,7 +13,7 @@ path_routes <- "SIG/Route/ROUTE_NUMEROTEE_OU_NOMMEE.shp"
 path_lidar  <- "SIG/Dombes_2021_MNT_50cm_L93.cog.tif"
 path_bv     <- "SIG/Hydrologie/bv_intervention.shp"
 path_OS     <- "SIG/OS.gpkg"
-
+path_thou   <- "SIG/Thou/ouvrage chalamont.gpkg"
 
 dir.create("GPKG_Sortie", showWarnings = FALSE)
 
@@ -41,8 +41,9 @@ routes <- st_read(path_routes)
 lidar  <- rast(path_lidar)
 bv <- st_read(path_bv) %>%  st_transform(crs = 2154) 
 OS <- st_read(path_OS)
+thou <- st_read(path_thou) %>% st_transform(2154)
 
-indices_bv <- which(bv$CODE %in% c(1, 19))
+indices_bv <- which(bv$CODE %in% c(2))
 
 #nrow(bv)
 for (i in indices_bv) {
@@ -82,6 +83,47 @@ os_final <- OS %>%
 # crop coupe le rectangle, mask coupe selon la forme exacte du buffer
 lidar_final <- crop(lidar, bv_buffer)
 lidar_5m <- aggregate(lidar_final, fact = 10, fun = "mean")
+# ... ton code actuel ...
+lidar_final <- crop(lidar, bv_buffer)
+lidar_5m <- aggregate(lidar_final, fact = 10, fun = "mean")
+
+# # ====================================================================
+# # BURNING DES THOUX (Creusement du MNT)
+# # ====================================================================
+print("Forçage des exutoires : Ouverture d'une brèche dans le MNT au niveau des thoux...")
+
+# On ne garde que les thoux présents dans le buffer actuel
+thou_local <- thou %>% st_intersection(bv_buffer)
+
+if(nrow(thou_local) > 0) {
+  # On convertit les points sf en vecteur terra
+  thou_v <- vect(thou_local)
+  
+  # On crée un cercle (buffer) de 15 mètres autour du thou
+  # Cela garantit qu'on coupe toute l'épaisseur de la digue 
+  thou_breche <- terra::buffer(thou_v, width = 15) 
+  
+  # On identifie TOUTES les cellules qui tombent dans ce gros cercle
+  ids_cellules <- cells(lidar_5m, thou_breche)[, "cell"]
+  
+  # Sécurité : on retire les éventuels NA et on supprime les doublons
+  ids_cellules <- unique(ids_cellules[!is.na(ids_cellules)])
+  
+  if(length(ids_cellules) > 0) {
+    # La magie noire : On abaisse l'altitude de TOUTE la brèche de 50 mètres !
+    lidar_5m[ids_cellules] <- lidar_5m[ids_cellules] - 50
+    print(paste("->", length(ids_cellules), "pixels ont été pulvérisés pour ouvrir la digue !"))
+  }
+} else {
+  print("-> Aucun thou trouvé dans ce secteur.")
+}
+# # ====================================================================
+
+print(paste("Lancement de l'hydrologie GRASS pour le BV :", nom_bv))
+
+mnt_temp <- "GPKG_Sortie/temp_mnt.tif"
+writeRaster(lidar_5m, mnt_temp, overwrite = TRUE)
+# ... suite de ton code ...
 
 print(paste("Lancement de l'hydrologie GRASS pour le BV :", nom_bv))
 
@@ -119,7 +161,95 @@ demi_poly <- as.polygons(rast(demi_tif)) %>%
   st_as_sf() %>% 
   st_make_valid()
 
+# ====================================================================
+# 💧 CRÉATION DES BASSINS VERSANTS PROPRES POUR CHAQUE ÉTANG
+# ====================================================================
+print("Calcul des bassins versants individuels emboîtés (Water Outlet)...")
 
+if(nrow(thou_local) > 0) {
+  liste_bv_etangs <- list()
+  
+  # 1. On boucle sur chaque thou (exutoire) du bassin versant actuel
+  for(k in 1:nrow(thou_local)) {
+    thou_pt <- thou_local[k, ]
+    
+    # Extraction des coordonnées X,Y pour GRASS
+    coords <- st_coordinates(thou_pt)
+    coord_str <- paste0(coords[1, "X"], ",", coords[1, "Y"])
+    
+    outlet_tif <- paste0("GPKG_Sortie/temp_outlet_", nom_bv, "_", k, ".tif")
+    
+    # Exécution de r.water.outlet depuis le thou
+    qgis_run_algorithm(
+      "grass:r.water.outlet",
+      input = dir_tif,       # Le raster de direction de drainage
+      coordinates = coord_str,
+      output = outlet_tif,
+      .quiet = TRUE
+    )
+    
+    # Polygonisation du résultat
+    # Polygonisation du résultat
+    bv_etang_poly <- as.polygons(rast(outlet_tif)) %>%
+      st_as_sf() %>%
+      st_make_valid() %>%
+      rename(valeur = 1) %>%      
+      filter(valeur > 0)      
+    
+    if(nrow(bv_etang_poly) > 0) {
+      # On fusionne en un seul polygone propre
+      bv_etang_poly <- st_union(bv_etang_poly) %>% st_as_sf()
+      
+      # On crée les colonnes utiles
+      bv_etang_poly$ID_Thou <- k
+      # Récupération du nom ou de l'ID si ton fichier thou en a un :
+      # bv_etang_poly$Nom_Thou <- thou_pt$NOM_COLONNE (à adapter si besoin)
+      
+      # Surface totale (avant découpage)
+      bv_etang_poly$Surface_Totale_m2 <- as.numeric(st_area(bv_etang_poly))
+      
+      liste_bv_etangs[[k]] <- bv_etang_poly
+    }
+    file.remove(outlet_tif) # Nettoyage du tif temporaire
+  }
+  
+  # 2. 🧩 L'ASTUCE DES POUPÉES RUSSES : La Soustraction Spatiale
+  if(length(liste_bv_etangs) > 0) {
+    # On rassemble tous les BV d'étangs et on trie du plus GRAND au plus PETIT
+    bv_tous <- bind_rows(liste_bv_etangs) %>%
+      arrange(desc(Surface_Totale_m2))
+    
+    # On prépare le fichier de sortie qui contiendra les BV découpés
+    bv_propres <- bv_tous
+    
+    # S'il y a plus d'un étang, on doit soustraire
+    if(nrow(bv_tous) > 1) {
+      for(m in 1:(nrow(bv_tous) - 1)) {
+        grand_bv <- st_geometry(bv_tous[m, ])
+        
+        # On regroupe TOUS les bassins plus petits que lui
+        petits_bv <- st_geometry(bv_tous[(m+1):nrow(bv_tous), ])
+        empreinte_petits <- st_union(petits_bv)
+        
+        # L'outil "Différence" magique : On perce les trous !
+        propre <- st_difference(grand_bv, empreinte_petits)
+        
+        st_geometry(bv_propres)[m] <- propre
+      }
+    }
+    
+    # On recalcule la surface finale "propre" (en hectares par exemple)
+    # On recalcule la surface finale "propre" (en hectares par exemple)
+    bv_propres <- bv_propres %>%
+      st_make_valid() 
+    
+    # On calcule la surface directement sur l'objet st_area(bv_propres) pour éviter l'erreur de nom de colonne
+    bv_propres$Surface_Propre_ha <- as.numeric(st_area(bv_propres)) / 10000
+    print(paste("->", nrow(bv_propres), "bassins versants propres d'étangs ont été calculés !"))
+  }
+} else {
+  print("-> Aucun thou trouvé, pas de calcul de BV d'étangs individuels.")
+}
 
 
 
@@ -156,8 +286,10 @@ st_write(os_final, nom_fichier_gpkg, layer = "OS", append = TRUE, quiet = TRUE, 
 st_write(bv_selection, nom_fichier_gpkg, layer = "bv_life", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom") 
 st_write(bas_poly,  nom_fichier_gpkg, layer = "Bassins_Versant_2000", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
 st_write(demi_poly, nom_fichier_gpkg, layer = "Demi_Bassins_2000", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
-
-
+if(exists("bv_propres")) {
+  st_write(bv_propres, nom_fichier_gpkg, layer = "BV_Etangs_Propres", append = TRUE, quiet = TRUE, layer_options = "GEOMETRY_NAME=geom")
+  rm(bv_propres) # On efface l'objet de la mémoire pour ne pas le sauvegarder par erreur sur le BV suivant !
+}
 
 
 #style
