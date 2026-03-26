@@ -2,12 +2,11 @@ library(sf)           # Pour manipuler les vecteurs (points, lignes, polygones)
 library(terra)        # Pour manipuler les rasters (MNT, Accumulation)
 library(dplyr)        # Pour filtrer et trier les tableaux de données
 library(qgisprocess)  # Pour appeler les algorithmes de QGIS/GRASS
-library(DBI)          # Pour interagir avec la base de données
 library(RSQLite)      # Pilote pour lire le format GeoPackage
 
-# ====================================================================
-# ÉTAPE 1 : CONFIGURATION ET CHARGEMENT DES DONNÉES
-# ====================================================================
+# ===========================================================================================================
+# ÉTAPE 1 : CONFIGURATION ET CHARGEMENT DES DONNÉES /A ttention, nom de fichier en fonction de vos dossiers.
+# ===========================================================================================================
 print("--- DÉMARRAGE DU TRAITEMENT HYDROLOGIQUE ---")
 
 options(qgisprocess.path = "C:/Users/adfayad/AppData/Local/Programs/OSGeo4W/bin/qgis_process-qgis.bat")
@@ -15,12 +14,12 @@ qgis_configure()
 
 chemin_gpkg   <- "GPKG_Sortie/BV_2_Complet.gpkg"
 
-# Chargement depuis les fichiers sources originaux
-thoux    <- st_read("SIG/Thou/ouvrage chalamont.gpkg", quiet = TRUE) %>% st_transform(2154)
-routes   <- st_read("SIG/Thou/route depression.gpkg",  quiet = TRUE) %>% st_transform(2154)
-chaussee <- st_read("SIG/Thou/chausser.gpkg",          quiet = TRUE) %>% st_transform(2154)
 
-# Chargement du MNT depuis le GeoPackage et FORÇAGE de l'EPSG:2154 (Lambert 93)
+thoux    <- st_read(chemin_gpkg, layer = "ouvrage_bv2", quiet = TRUE) %>% st_transform(2154)
+routes   <- st_read(chemin_gpkg, layer = "route_depression_bv2", quiet = TRUE) %>% st_transform(2154)
+chaussee <- st_read(chemin_gpkg, layer = "chaussee_bv2", quiet = TRUE) %>% st_transform(2154)
+
+# Chargement du MNT depuis le GeoPackage
 mnt <- rast(paste0("GPKG:", chemin_gpkg, ":MNT_5m"))
 crs(mnt) <- "EPSG:2154"
 
@@ -79,7 +78,7 @@ qgis_run_algorithm(
 acc_rast <- rast(acc_tif)
 dir_rast <- rast(dir_tif)
 
-# Sécurité Spatiale ABSOLUE : On force l'EPSG en "dur" pour éviter le "?" dans QGIS
+# Sécurité Spatiale 
 ext(acc_rast) <- ext(mnt)
 crs(acc_rast) <- "EPSG:2154"
 
@@ -178,9 +177,8 @@ if (length(liste_bv_etangs) > 0) {
   print("Échec : Aucun bassin généré.")
 }
 
-# Nettoyage fichiers temporaires
 # ====================================================================
-# NETTOYAGE RADICAL DES FICHIERS TEMPORAIRES (TIF, TFW, PRJ, XML...)
+# NETTOYAGE  DES FICHIERS TEMPORAIRES (TIF, TFW, PRJ, XML...)
 # ====================================================================
 # On liste tous les fichiers qui commencent par nos noms temporaires
 fichiers_fantomes <- list.files(

@@ -87,10 +87,10 @@ for (i in indices_bv) {
   lidar_final <- crop(lidar, bv_buffer)
   lidar_5m <- aggregate(lidar_final, fact = 10, fun = "mean")
   
-  
-  # # ====================================================================
-  # # BURNING DES THOUX (Creusement du MNT)
-  # # ====================================================================
+  # 
+  # # # ====================================================================
+  # # # BURNING DES THOUX (Creusement du MNT)
+  # # # ====================================================================
   # print("Forçage des exutoires : Ouverture d'une brèche dans le MNT au niveau des thoux...")
   # 
   # # On ne garde que les thoux présents dans le buffer actuel
@@ -99,16 +99,16 @@ for (i in indices_bv) {
   # if(nrow(thou_local) > 0) {
   #   # On convertit les points sf en vecteur terra
   #   thou_v <- vect(thou_local)
-  #   
+  # 
   #   # On crée un cercle (buffer) de 15 mètres autour du thou
-  #   thou_breche <- terra::buffer(thou_v, width = 15) 
-  #   
+  #   thou_breche <- terra::buffer(thou_v, width = 15)
+  # 
   #   # On identifie TOUTES les cellules qui tombent dans ce gros cercle
   #   ids_cellules <- cells(lidar_5m, thou_breche)[, "cell"]
-  #   
+  # 
   #   # Sécurité : on retire les éventuels NA et on supprime les doublons
   #   ids_cellules <- unique(ids_cellules[!is.na(ids_cellules)])
-  #   
+  # 
   #   if(length(ids_cellules) > 0) {
   #     # La magie noire : On abaisse l'altitude de TOUTE la brèche de 50 mètres !
   #     lidar_5m[ids_cellules] <- lidar_5m[ids_cellules] - 50
@@ -118,9 +118,9 @@ for (i in indices_bv) {
   #   print("-> Aucun thou trouvé dans ce secteur.")
   # }
   # 
-  # # ====================================================================
-  # # BURNING DES PASSAGES SOUS ROUTE (Buses et ponts)
-  # # ====================================================================
+  # # # ====================================================================
+  # # # BURNING DES PASSAGES SOUS ROUTE (Buses et ponts)
+  # # # ====================================================================
   # print("Forçage des écoulements : Ouverture des passages sous la route...")
   # 
   # # 1. On ne garde que les points de passage route présents dans le buffer actuel
@@ -129,16 +129,16 @@ for (i in indices_bv) {
   # if(nrow(pts_route_local) > 0) {
   #   # 2. On convertit les points sf en vecteur terra
   #   route_v <- vect(pts_route_local)
-  #   
+  # 
   #   # 3. On crée un cercle (buffer) de 15 mètres autour du point.
-  #   route_breche <- terra::buffer(route_v, width = 15) 
-  #   
+  #   route_breche <- terra::buffer(route_v, width = 15)
+  # 
   #   # 4. On identifie TOUTES les cellules qui tombent dans ce cercle
   #   ids_cellules_route <- cells(lidar_5m, route_breche)[, "cell"]
-  #   
+  # 
   #   # Sécurité : on retire les éventuels NA et on supprime les doublons
   #   ids_cellules_route <- unique(ids_cellules_route[!is.na(ids_cellules_route)])
-  #   
+  # 
   #   if(length(ids_cellules_route) > 0) {
   #     # 5. La magie noire bis : On abaisse l'altitude de 50 mètres sous la route !
   #     lidar_5m[ids_cellules_route] <- lidar_5m[ids_cellules_route] - 20
@@ -147,7 +147,7 @@ for (i in indices_bv) {
   # } else {
   #   print("-> Aucun passage sous route (buse) trouvé dans ce secteur.")
   # }
-  # 
+
   # # ====================================================================
   # # BURNING DES LIGNES DE FOND D'ÉTANG (Thalwegs / Chaussées)
   # # ====================================================================
