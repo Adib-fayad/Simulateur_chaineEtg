@@ -11,10 +11,11 @@ load("Volume_etang/Plat.Rdata")
 load("Volume_etang/Carronnier.Rdata")
 load("Volume_etang/Corveyzieux.Rdata")
 load("Volume_etang/Four.Rdata")
+load("Volume_etang/Ligniere.Rdata")
 
 df_reel <- Carronnier %>%
   mutate(dat = as.Date(Date_jour)) %>%
-  select(dat, Volume_Reel = volume) %>% 
+  select(dat, Volume_Reel = Volume_m3) %>% 
   drop_na(dat)
 
 # B. Données du Modèle (Simulations SAFRAN)
@@ -93,14 +94,14 @@ library(scales) # Pour l'affichage en pourcentages
 # ====================================================================
 
 # A. Données Terrain (Observations)
-load("Volume_etang/Corveyzieux.Rdata")
+load("Volume_etang/Plat.Rdata")
 
-df_reel <- Corveyzieux %>%
+df_reel <- Plat %>%
   mutate(dat = as.Date(Date_jour)) %>%
   select(dat, TxRempli_Reel = TxRempli) %>%
   drop_na(dat)
 
-nom_etang_cible <- "CORVEYZIEUX" 
+nom_etang_cible <- "PLAT" 
 
 df_simule <- liste_etangs[[nom_etang_cible]] %>%
   mutate(

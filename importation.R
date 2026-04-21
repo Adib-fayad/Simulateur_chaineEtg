@@ -45,8 +45,8 @@ cnetg <- os_complet %>%
 # Chargement des caractéristiques des étangs
 etg = read.csv2("Etangs_Chalamont.csv", header = TRUE, dec = ",", sep = ";") %>% 
   filter(Chaine_etu == "oui") %>% 
-  rename(SURFACE_eau = SURFACE_SI) %>% 
   select(-num_range("Assec", 2021:2025))
+
 
 ASSEC = read.csv2("ASSEC_Final_2010_2025.csv", header = TRUE, sep = ";") %>% 
   select(-Exutoire_1, -OBJECTID)
@@ -54,8 +54,12 @@ ASSEC = read.csv2("ASSEC_Final_2010_2025.csv", header = TRUE, sep = ";") %>%
 etg = ASSEC %>% inner_join(etg, by ="NOM")
 
 # Calcul du Volume Max (Vmax)
-etg$Vmax = etg$SURFACE_eau * etg$Profondeur_m * 10000
-
+etg <- etg %>%
+  mutate(Vmax = ifelse(
+    is.na(Vmax),                                
+    SURFACE_eau * Profondeur_m * 10000,     
+    Vmax                                       
+  ))
 # Fusion finale Étangs + Curve Number + Vidanges
 Vidange_peche <- read.csv("Vidange_Peche_2010_2025.csv", sep = ",")
 
@@ -137,3 +141,4 @@ pluvio <- meteo_brute %>%
   arrange(dat)
 
 print("Série Pluvio SAFRAN 2010-2025 générée avec succès !")
+

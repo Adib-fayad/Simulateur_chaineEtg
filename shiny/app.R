@@ -1,10 +1,10 @@
 library(shiny)
 library(shinythemes)
 library(tidyverse)
-library(arrow)
 library(lubridate)
 library(zoo)
 library(igraph)
+library(plotly) 
 
 # Chargement des fonctions de calcul
 source("fonctions.R")
