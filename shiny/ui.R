@@ -57,13 +57,13 @@ ui <- fluidPage(
                  br(),
                  
                  # Disposition en ligne pour les menus de contrôle des graphiques
+                 # Ligne de paramètres graphiques divisée en 4 colonnes
                  fluidRow(
-                   column(4, 
-                          # Sélection de la variable physique à projeter sur l'axe des ordonnées
-                          selectInput("var_plot", "Sélectionner la variable à analyser :", 
+                   column(3, 
+                          selectInput("var_plot", "Variable à analyser :", 
                                       choices = c(
                                         "Volume stocké (BF) [m³]" = "BF",
-                                        "Volume déversé vers l'aval (Vsortant) [m³]" = "Vsortant",
+                                        "Volume déversé (Vsortant) [m³]" = "Vsortant",
                                         "Pluviométrie (RR) [mm]" = "RR",
                                         "Ruissellement capté (Volume_R) [m³]" = "Volume_R",
                                         "Bilan Pluie-Évapo (Vp_etp) [m³]" = "Vp_etp",
@@ -71,17 +71,25 @@ ui <- fluidPage(
                                       ), 
                                       width = "100%") 
                    ),
-                   column(4,
-                          # Sortie dynamique pour le réglage précis de la plage temporelle affichée
+                   column(3,
+                          # CORRECTION : Utilisation de "week" (natif et incassable)
+                          selectInput("time_step", "Pas de temps (Lissage) :", 
+                                      choices = c(
+                                        "Journalier (Brut)" = "day",
+                                        "Hebdomadaire (7 jours)" = "week",
+                                        "Mensuel" = "month",
+                                        "Annuel" = "year"
+                                      ), 
+                                      width = "100%")
+                   ),
+                   column(3,
                           uiOutput("ui_zoom_dates")
                    ),
-                   column(4,
+                   column(3,
                           br(), 
-                          # Option d'affichage des données d'observation pour comparaison modèle/mesures
-                          checkboxInput("show_terrain", "Superposer les données Terrain (Sonde)", value = FALSE)
+                          checkboxInput("show_terrain", "Superposer les données Terrain", value = FALSE)
                    )
                  ),
-                 
                  # Sortie graphique interactive générée via la librairie Plotly
                  plotlyOutput("plot_calibration", height = "500px"),
                  
@@ -90,11 +98,47 @@ ui <- fluidPage(
                  tags$h4("Indicateurs Clés de l'Étang"),
                  tableOutput("kpi_table")
         ),
+        #NOUVEL ONGLET : EXUTOIRE FINAL
+        tabPanel("Exutoire Final", 
+                 br(),
+                 h4("Débit global en sortie de bassin versant"),
+                 p("Ce graphique cumule l'ensemble des volumes d'eau rejetés vers la rivière par les étangs."),
+                 
+                 fluidRow(
+                   column(3,
+                          selectInput("time_step_exutoire", "Pas de temps (Lissage) :", 
+                                      choices = c("Journalier" = "day", "Hebdomadaire" = "week", "Mensuel" = "month", "Annuel" = "year"), 
+                                      width = "100%")
+                   ),
+                   column(3,
+                          uiOutput("ui_zoom_dates_exutoire")
+                   ),
+                   column(3,
+                          selectInput("etang_superpose_ex", "Comparer avec l'étang :", 
+                                      choices = NULL, 
+                                      width = "100%")
+                   ),
+                   column(3,
+                          # NOUVEAU : Choix de la date pour calculer le nombre d'étangs pleins
+                          dateInput("date_stat", "Date d'analyse (Étangs pleins) :", 
+                                    value = "2015-01-01", width = "100%")
+                   )
+                 ),
+                 
+                 hr(),
+                 plotlyOutput("plot_exutoire", height = "500px"),
+                 
+                 hr(),
+                 #Zone pour le tableau des statistiques 
+                 tags$h4("Statistiques Globales du Réseau"),
+                 tableOutput("table_stats_exutoire")
+        ),
         
         # Second onglet pour le suivi technique du processus de simulation
         tabPanel("Journal d'exécution", 
                  # Affichage du flux textuel généré pendant les calculs
                  verbatimTextOutput("console_log"))
+        
       )
     )
   )

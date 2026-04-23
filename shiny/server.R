@@ -118,12 +118,12 @@ server <- function(input, output, session) {
   }
   
   # Initialisation des variables réactives pour l'interface
-  data_res <- reactiveValues(liste_finale = NULL, log = "En attente d'exécution...", pond_names = NULL)
+  data_res <- reactiveValues(liste_finale = NULL, log = "En attente d'exécution...", pond_names = NULL, exutoire_data = NULL)
   
   # Gestionnaire d'événements pour le lancement de la simulation
   observeEvent(input$run_sim, {
     req(input$file_os, input$file_etg, input$file_assec, input$file_vidange)
-    
+   
     # Affichage d'une notification de progression
     id_chargement <- showNotification("Lecture des fichiers en cours, veuillez patienter...", 
                                       duration = NULL, closeButton = FALSE, type = "message")
@@ -349,7 +349,7 @@ server <- function(input, output, session) {
           etangs_calcule <- liste_etangs[[nom_etang]]
           Stockage_Vamont <- numeric(nrow(etangs_calcule))
           etangs_calcule$Vol_Vidange_Jour <- 0
-          
+          etangs_calcule$Vsortant <- 0  
           # Identification temporelle des opérations de vidange et de pêche
           lignes_vidange <- which(etangs_calcule$Vidange == "oui")
           lignes_peche <- which(etangs_calcule$peche == "oui")
@@ -392,6 +392,7 @@ server <- function(input, output, session) {
             
             etangs_calcule$BF[jour] = resultat$BF
             Stockage_Vamont[jour] = resultat$Vsortant
+            etangs_calcule$Vsortant[jour] = resultat$Vsortant 
           }
           
           # Mise à jour des données et transfert des flux vers l'exutoire défini
@@ -409,13 +410,14 @@ server <- function(input, output, session) {
       })
       
       # Actualisation de l'état réactif de l'application
+      data_res$exutoire_data <- Volume_Total_Exutoire_BV
       data_res$liste_finale <- liste_etangs
       data_res$pond_names <- ordre_topologique
       data_res$log <- paste0(data_res$log, "Simulation terminée avec succès.\n")
       
       # Mise à jour du sélecteur d'étang pour l'utilisateur
       updateSelectInput(session, "etang_choisi", choices = data_res$pond_names)
-      
+      updateSelectInput(session, "etang_superpose_ex",choices = c("Aucun", data_res$pond_names))
       removeNotification(id_chargement)
       showNotification("Simulation terminée avec succès !", type = "message", duration = 5)
       
@@ -440,7 +442,18 @@ server <- function(input, output, session) {
                    min = min(df$dat), max = max(df$dat))
   })
   
-  # Gestionnaire de rendu graphique via Plotly
+  # Génération dynamique du contrôle de sélection de dates pour l'exutoire
+  output$ui_zoom_dates_exutoire <- renderUI({
+    req(data_res$exutoire_data)
+    df <- data_res$exutoire_data 
+    dateRangeInput("viz_dates_exutoire", "Plage de visualisation :",
+                   start = min(df$dat), end = max(df$dat),
+                   min = min(df$dat), max = max(df$dat))
+  })
+  # =======================================================
+  # AFFICHAGE ET EXPORT (Calibration)
+  # =======================================================
+  
   output$plot_calibration <- renderPlotly({
     req(data_res$liste_finale)
     req(input$etang_choisi) 
@@ -450,25 +463,59 @@ server <- function(input, output, session) {
     var_select <- input$var_plot
     df_plot <- data_res$liste_finale[[nom_etang]]
     
-    # Application du filtre temporel utilisateur
+    # 1. Filtre sur les dates
     if (!is.null(input$viz_dates)) {
       df_plot <- df_plot %>% 
         filter(dat >= input$viz_dates[1] & dat <= input$viz_dates[2])
     }
     
-    # Intégration optionnelle des mesures terrain pour comparaison
+    # 2. Application du lissage temporel selon le choix de l'utilisateur
+    req(input$time_step)
+    if (input$time_step != "day") {
+      df_plot <- df_plot %>%
+        # Création des paliers de temps (arrondis à la décade, au mois ou à l'année)
+        mutate(dat = lubridate::floor_date(dat, unit = input$time_step)) %>%
+        group_by(dat) %>%
+        summarise(
+          # Règle physique 1 : Moyenne pour les variables de stock
+          BF = mean(BF, na.rm = TRUE),
+          
+          # Règle physique 2 : Cumul pour les variables de flux
+          Vsortant = sum(Vsortant, na.rm = TRUE),
+          RR = sum(RR, na.rm = TRUE),
+          Volume_R = sum(Volume_R, na.rm = TRUE),
+          Vp_etp = sum(Vp_etp, na.rm = TRUE),
+          Vol_Vidange_Jour = sum(Vol_Vidange_Jour, na.rm = TRUE),
+          
+          # Conservation du paramètre statique
+          Vmax = first(Vmax),
+          .groups = "drop"
+        )
+    }
+    
+    # 3. Injection des données Terrain si la case est cochée
     terrain_dispo <- FALSE
     if (input$show_terrain) {
       df_terrain <- load_terrain(nom_etang)
       if (!is.null(df_terrain)) {
+        
+        # Si le modèle est lissé, il faut appliquer strictement le même lissage au terrain
+        if (input$time_step != "day") {
+          df_terrain <- df_terrain %>%
+            mutate(dat = lubridate::floor_date(dat, unit = input$time_step)) %>%
+            group_by(dat) %>%
+            # Le terrain est un relevé de niveau (stock), on utilise donc la moyenne
+            summarise(Volume_Reel = mean(Volume_Reel, na.rm = TRUE), .groups = "drop")
+        }
+        
         df_plot <- df_plot %>% left_join(df_terrain, by = "dat")
         terrain_dispo <- TRUE
       }
     }
     
+    # 4. Construction du graphique avec ggplot
     p <- ggplot(df_plot, aes(x = dat)) + theme_minimal()
     
-    # Branchement des différents types de rendus selon la variable sélectionnée
     if (var_select == "BF") {
       p <- p + geom_line(aes(y = BF), color = "#2c3e50", linewidth = 0.8) +
         geom_hline(yintercept = df_plot$Vmax[1], color = "black", linetype = "dotted", alpha = 0.5) +
@@ -487,7 +534,7 @@ server <- function(input, output, session) {
       
     } else if (var_select == "RR") {
       p <- p + geom_col(aes(y = RR), fill = "#3498db") +
-        labs(title = paste("Pluviométrie SAFRAN -", nom_etang), y = "Pluie (mm/jour)", x = "Date")
+        labs(title = paste("Pluviométrie SAFRAN -", nom_etang), y = "Pluie (mm/période)", x = "Date")
     } else if (var_select == "Vsortant") {
       p <- p + geom_area(aes(y = Vsortant), fill = "#e74c3c", alpha = 0.5) +
         geom_line(aes(y = Vsortant), color = "#c0392b") +
@@ -497,6 +544,7 @@ server <- function(input, output, session) {
         labs(title = paste("Analyse de :", var_select, "-", nom_etang), y = "Valeur", x = "Date")
     }
     
+    # 5. Rendu interactif Plotly
     ggplotly(p, dynamicTicks = TRUE) %>%
       layout(
         hovermode = "x unified",
@@ -548,6 +596,138 @@ server <- function(input, output, session) {
     }
     
     data.frame(Indicateur = indics, Valeur = valeurs)
+    
+  }, striped = TRUE, hover = TRUE, bordered = TRUE, width = "100%")
+  output$plot_exutoire <- renderPlotly({
+    req(data_res$exutoire_data)
+    
+    # 1. Préparation des données Exutoire
+    df_ex <- data_res$exutoire_data
+    
+    if (!is.null(input$viz_dates_exutoire)) {
+      df_ex <- df_ex %>% filter(dat >= input$viz_dates_exutoire[1] & dat <= input$viz_dates_exutoire[2])
+    }
+    
+    # Lissage Exutoire (C'est un flux, on fait la somme)
+    req(input$time_step_exutoire)
+    if (input$time_step_exutoire != "day") {
+      df_ex <- df_ex %>%
+        mutate(dat = lubridate::floor_date(dat, unit = input$time_step_exutoire)) %>%
+        group_by(dat) %>%
+        summarise(Volume_Riviere = sum(Volume_Riviere, na.rm = TRUE), .groups = "drop")
+    }
+    
+    # 2. Base du graphique : Tracer l'exutoire EN PREMIER (Arrière-plan)
+    p <- ggplot() + theme_minimal() +
+      geom_area(data = df_ex, aes(x = dat, y = Volume_Riviere, fill = "Débit Exutoire Total"), alpha = 0.2) +
+      geom_line(data = df_ex, aes(x = dat, y = Volume_Riviere, color = "Débit Exutoire Total"), linewidth = 1)
+    
+    # 3. Préparation et ajout des données Étang EN DEUXIÈME (Par-dessus)
+    if (!is.null(input$etang_superpose_ex) && input$etang_superpose_ex != "Aucun") {
+      df_etang <- data_res$liste_finale[[input$etang_superpose_ex]]
+      
+      # On applique le même filtre de date
+      if (!is.null(input$viz_dates_exutoire)) {
+        df_etang <- df_etang %>% filter(dat >= input$viz_dates_exutoire[1] & dat <= input$viz_dates_exutoire[2])
+      }
+      
+      # On applique le lissage : ATTENTION, BF est un STOCK, on utilise la moyenne (mean)
+      if (input$time_step_exutoire != "day") {
+        df_etang <- df_etang %>%
+          mutate(dat = lubridate::floor_date(dat, unit = input$time_step_exutoire)) %>%
+          group_by(dat) %>%
+          summarise(BF = mean(BF, na.rm = TRUE), .groups = "drop")
+      }
+      
+      # Ajout de la courbe de l'étang (Variable BF) avec une ligne épaisse
+      p <- p + geom_line(data = df_etang, aes(x = dat, y = BF, color = "Volume Stocké Étang (BF)"), linewidth = 1.2)
+    }
+    
+    # 4. Paramétrage final des couleurs et des axes
+    p <- p + 
+      scale_color_manual(values = c("Volume Stocké Étang (BF)" = "#3498db", "Débit Exutoire Total" = "darkred")) +
+      scale_fill_manual(values = c("Débit Exutoire Total" = "darkred")) +
+      scale_y_continuous(labels = scales::comma_format(big.mark = " ")) +
+      labs(title = "Comparaison Volume de l'Étang (BF) vs Débit de l'Exutoire",
+           y = "Volume (m³)", x = "Date", color = "Légende", fill = "Zone")
+    
+    ggplotly(p, dynamicTicks = TRUE) %>%
+      layout(hovermode = "x unified", xaxis = list(rangeslider = list(type = "date")))
+  })
+  # =======================================================
+  # TABLEAU DES STATISTIQUES GLOBALES (EXUTOIRE)
+  # =======================================================
+  output$table_stats_exutoire <- renderTable({
+    req(data_res$exutoire_data)
+    req(data_res$liste_finale)
+    
+    df_ex <- data_res$exutoire_data
+    
+    # NOUVEAU : On filtre les données avec la plage de date choisie par l'utilisateur
+    if (!is.null(input$viz_dates_exutoire)) {
+      df_ex <- df_ex %>% 
+        filter(dat >= input$viz_dates_exutoire[1] & dat <= input$viz_dates_exutoire[2])
+    }
+    
+    # Si la plage de date ne renvoie aucune donnée, on évite le crash
+    if(nrow(df_ex) == 0) return(NULL)
+    
+    # 1. Nombre de jours avec écoulement supérieur à 0 (Sur la période filtrée)
+    jours_sup_0 <- sum(df_ex$Volume_Riviere > 8.64, na.rm = TRUE)
+    
+    # 2. Moyenne par jour (Sur la période filtrée)
+    moy_jour <- mean(df_ex$Volume_Riviere, na.rm = TRUE)
+    
+    # 3. Moyenne par mois (Sur la période filtrée)
+    df_mois <- df_ex %>%
+      mutate(mois_an = lubridate::floor_date(dat, "month")) %>%
+      group_by(mois_an) %>%
+      summarise(vol = sum(Volume_Riviere, na.rm = TRUE), .groups = "drop")
+    moy_mois <- mean(df_mois$vol, na.rm = TRUE)
+    
+    # 4. Moyenne par an (Sur la période filtrée)
+    df_an <- df_ex %>%
+      mutate(annee = lubridate::floor_date(dat, "year")) %>%
+      group_by(annee) %>%
+      summarise(vol = sum(Volume_Riviere, na.rm = TRUE), .groups = "drop")
+    moy_an <- mean(df_an$vol, na.rm = TRUE)
+    
+    # 5. Calcul du nombre d'étangs pleins (BF >= Vmax) à la date sélectionnée
+    nb_etangs_pleins <- 0
+    date_choisie <- input$date_stat
+    
+    if (!is.null(date_choisie)) {
+      # On boucle sur la liste de tous les étangs simulés
+      for (nom in names(data_res$liste_finale)) {
+        df_etang <- data_res$liste_finale[[nom]]
+        ligne_date <- df_etang[df_etang$dat == as.Date(date_choisie), ]
+        
+        if (nrow(ligne_date) > 0) {
+          # Arrondi pour éviter les erreurs informatiques sur les petites décimales
+          if (round(ligne_date$BF, 0) >= round(ligne_date$Vmax, 0)) {
+            nb_etangs_pleins <- nb_etangs_pleins + 1
+          }
+        }
+      }
+    }
+    
+    # Construction du tableau de présentation
+    data.frame(
+      "Indicateur" = c(
+        "Nombre de jours avec écoulement (> 0 m³) sur la période",
+        "Volume moyen relâché par JOUR sur la période",
+        "Volume moyen relâché par MOIS sur la période",
+        "Volume moyen relâché par AN sur la période",
+        paste("Nombre d'étangs pleins le", format(as.Date(date_choisie), "%d/%m/%Y"))
+      ),
+      "Valeur" = c(
+        paste(format(jours_sup_0, big.mark = " "), "jours"),
+        paste(format(round(moy_jour, 0), big.mark = " "), "m³"),
+        paste(format(round(moy_mois, 0), big.mark = " "), "m³"),
+        paste(format(round(moy_an, 0), big.mark = " "), "m³"),
+        paste(nb_etangs_pleins, "étang(s) sur", length(data_res$liste_finale))
+      )
+    )
     
   }, striped = TRUE, hover = TRUE, bordered = TRUE, width = "100%")
 }
