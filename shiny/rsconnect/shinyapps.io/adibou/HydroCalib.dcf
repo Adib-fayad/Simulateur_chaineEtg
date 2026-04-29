@@ -1,0 +1,12 @@
+name: HydroCalib
+title: HydroCalib
+username: adibou
+account: adibou
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17181005
+bundleId: 11917719
+url: https://adibou.shinyapps.io/HydroCalib/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
