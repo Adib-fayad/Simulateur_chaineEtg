@@ -4,19 +4,3 @@
 .httr-oauth
 .DS_Store
 .quarto
-# ----------------------------------
-# Fichiers temporaires et de données
-# ----------------------------------
-*.csv
-*.CSV
-*.tif
-*.TIF
-*.gpkg
-*.png
-*.xlsx
-*.docx
-GPKG_Sortie/
-temp_*/
-meteo/
-Volume_etang/
-Export_Graphes/
