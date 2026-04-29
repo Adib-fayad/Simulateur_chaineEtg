@@ -193,17 +193,11 @@ server <- function(input, output, session) {
           TRUE ~ 0
         ),
         
-        Volume_R = CR * RR_num * (Surface_BV - SURFACE_eau) * 10,
         VFuite = round(0.1 * 3600 * 24) / 1000,
-        Vp_etp = replace_na(as.numeric(P_ETP), 0) * SURFACE_eau * 10,
         Vidange = if_else(dat == as.Date(Vidange), "oui", "non", missing = "non"),
-        peche   = if_else(dat == as.Date(peche), "oui", "non", missing = "non"),
-        Vamont = 0,
-        BF = case_when(
-          dat == dates_input[1] & assec == "Evolage" ~ Vmax / 2, 
-          TRUE ~ 0
-        )
+        peche   = if_else(dat == as.Date(peche), "oui", "non", missing = "non")
       ) %>% 
+      # 1. On détermine d'abord le statut de l'étang (Assec ou Evolage)
       group_by(NOM, annee) %>%
       mutate(
         Statut_Simu = case_when(
@@ -213,6 +207,23 @@ server <- function(input, output, session) {
         )
       ) %>% 
       ungroup() %>%
+      # 2. NOUVEAU : On calcule l'eau EN FONCTION du statut
+      mutate(
+        # L'ASTUCE EST ICI : Si Assec, le fond de l'étang redevient de la terre (Surface_BV entière)
+        Surface_Active_Ruissellement = if_else(Statut_Simu == "Assec", Surface_BV, Surface_BV - SURFACE_eau),
+        
+        Volume_R = CR * RR_num * Surface_Active_Ruissellement * 10,
+        
+        # Si Assec, il n'y a plus de plan d'eau, donc la pluie directe et l'évaporation d'eau libre tombent à zéro 
+        # (L'évaporation et l'infiltration sont maintenant gérées par la formule du Curve Number !)
+        Vp_etp = if_else(Statut_Simu == "Assec", 0, replace_na(as.numeric(P_ETP), 0) * SURFACE_eau * 10),
+        
+        Vamont = 0,
+        BF = case_when(
+          dat == dates_input[1] & assec == "Evolage" ~ Vmax / 2, 
+          TRUE ~ 0
+        )
+      ) %>%
       select(-annee, -assec, -Assec_Futur)
     
     liste_etangs <- df_bilan %>% split(.$NOM)
