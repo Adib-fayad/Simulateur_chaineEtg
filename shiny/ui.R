@@ -105,7 +105,7 @@ ui <- fluidPage(
                  tags$h4("Indicateurs Clés de l'Étang"),
                  tableOutput("kpi_table")
         ),
-        #NOUVEL ONGLET : EXUTOIRE FINAL
+        # EXUTOIRE FINAL
         tabPanel("Exutoire Final", 
                  br(),
                  h4("Débit global en sortie de bassin versant"),
@@ -140,6 +140,7 @@ ui <- fluidPage(
                  plotlyOutput("plot_bilan_pie", height = "400px"),
                  tableOutput("table_stats_exutoire")
         ),
+        
         tabPanel("Chronologie des Assecs prévus",
                  br(),
                  h4("Diagramme de Gantt des périodes de mise à sec planifiées"),
@@ -155,6 +156,7 @@ ui <- fluidPage(
                  hr(),
                  plotlyOutput("plot_gantt_assec", height = "600px")
         ),
+        
         tabPanel("Opérations : Pêche & Vidange",
                  br(),
                  h4("Calendrier des opérations de vidange et de pêche"),
@@ -170,6 +172,7 @@ ui <- fluidPage(
                  hr(),
                  plotlyOutput("plot_operations", height = "600px")
         ),
+        
         tabPanel("Carte Dynamique",
                  br(),
                  h4("Évolution spatiale du bassin versant"),
@@ -182,13 +185,13 @@ ui <- fluidPage(
                           uiOutput("ui_slider_carte")
                    ),
                    column(5, offset = 1,
-                          # 1. Choix de la couleur principale des polygones
+                          # Choix de la couleur principale des polygones
                           radioButtons("color_carte", "1. Couleur de fond des étangs/BV :",
                                        choices = c("Taux de remplissage en eau" = "volume",
                                                    "État de saturation du sol (Curve Number)" = "etat_sol"),
                                        selected = "volume"),
                           
-                          # 2. Choix des calques à superposer par-dessus
+                          # hoix des calques à superposer par-dessus
                           checkboxGroupInput("overlay_carte", "2. Calques supplémentaires :",
                                              choices = c("Masquer les étangs en Assec (Couvre en orange)" = "statut",
                                                          "Afficher le Ruissellement du jour (Bulles)" = "ruissellement"),

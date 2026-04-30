@@ -112,7 +112,7 @@ server <- function(input, output, session) {
       st_transform(4326) 
   })
   
-  # --- FONCTION PRINCIPALE DE SIMULATION ---
+  # FONCTION PRINCIPALE DE SIMULATION 
   run_hydrological_model <- function(fichier_meteo, tab_etg, bv_code, dates_input, ordre_topologique) {
     
     coordonnees <- read.csv("meteo/SAFRAN/centro_BV.csv", header = TRUE, sep = ",") %>% 
