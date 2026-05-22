@@ -478,7 +478,7 @@ server <- function(input, output, session) {
         Pseudo_CR_Terrain = (Volume_Residuel / Vol_Pluie_Sur_Terre) * 100,
         
         # Le filtre magique : On ne retient que les vrais orages
-        Est_Orage_Valide = (RR >= 5 & Vidange == "non" & peche == "non" & Pseudo_CR_Terrain > 0 & Pseudo_CR_Terrain <= 100 & !is.na(Pseudo_CR_Terrain))
+        Est_Orage_Valide = (RR >= 5 & Vidange == "non" & peche == "non" & Pseudo_CR_Terrain > 0  & !is.na(Pseudo_CR_Terrain))
       ) %>% select(dat, RR, Est_Orage_Valide, Vol_Pluie_Sur_Terre, Pseudo_CR_Terrain, CR_Mod1_Pct, Vol_R_Mod1)
     
     # Ajout du Scénario 2 s'il existe
