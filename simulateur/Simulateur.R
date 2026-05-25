@@ -432,30 +432,37 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, lambda_val = 0.20,
     for (jour in 2:nrow(etangs_calcule)) {
       
       # ====================================================================
-      # INJECTION ROBUSTE : VIDANGE SPÉCIFIQUE REMONDE NORD (Hiver 2023)
+      # INJECTION : EXPÉRIMENTATIONS (REMONDE NORD & TRANSFERT CORVEYZIEUX)
       # ====================================================================
-      # grepl permet de trouver l'étang même s'il y a un tiret (REMONDE_NORD) ou une minuscule
+      
+      date_jour <- etangs_calcule$dat[jour]
+      
+      # 1. VIDANGE REMONDE NORD (Hiver 2023)
       if (grepl("REMONDE", nom_etang, ignore.case = TRUE) && grepl("NORD", nom_etang, ignore.case = TRUE)) { 
-        date_jour <- etangs_calcule$dat[jour]
-        
         if (date_jour >= as.Date("2023-12-15") && date_jour <= as.Date("2024-01-01")) {
           vol_actuel <- etangs_calcule$BF[jour-1]
           volume_cible <- 46934
-          
-          # Jours restants jusqu'à la fin de la période (pour lisser la vidange)
           jours_restants <- as.numeric(as.Date("2024-01-01") - date_jour) + 1
-          
           if (vol_actuel > volume_cible) {
-            # On recalcule chaque jour pour compenser la pluie éventuelle !
             etangs_calcule$Vol_Vidange_Jour[jour] <- (vol_actuel - volume_cible) / jours_restants
-            
-            # Petit message dans la console pour te prouver que ça s'active le 1er jour
-            if (date_jour == as.Date("2023-12-15")) {
-              print(paste(">>> DÉCLENCHEMENT VIDANGE :", nom_etang, "- Volume au 15/12 =", round(vol_actuel), "m3 -> Cible = 46934 m3"))
-            }
-          } else if (date_jour == as.Date("2023-12-15")) {
-            print(paste(">>> INFO :", nom_etang, "est déjà en dessous de 46934 m3 le 15 Décembre. Pas de vidange forcée."))
           }
+        }
+      }
+      
+      # 2. TRANSFERT CORVEYZIEUX -> GRAND ETANG LA ROUE (10-12 Janv 2025)
+      # Débit 300 m3/h * 24h = 7200 m3/jour
+      if (date_jour >= as.Date("2025-01-10") && date_jour <= as.Date("2025-01-12")) {
+        
+        # Étang Source : Corveyzieux
+        if (grepl("CORVEYZIEUX", nom_etang, ignore.case = TRUE)) {
+          # On force une vidange journalière pour sortir l'eau
+          etangs_calcule$Vol_Vidange_Jour[jour] <- 7200
+        }
+        
+        # Étang Cible : Grand Étang La Roue
+        if (grepl("GRAND", nom_etang, ignore.case = TRUE) && grepl("ROUE", nom_etang, ignore.case = TRUE)) {
+          # On injecte l'eau via Vamont (apport externe artificiel)
+          etangs_calcule$Vamont[jour] <- etangs_calcule$Vamont[jour] + 7200
         }
       }
       # ====================================================================
@@ -491,7 +498,19 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, lambda_val = 0.20,
 # ==============================================================================
 # 3. EXÉCUTION DE L'EXPÉRIMENTATION SPÉCIFIQUE
 # ==============================================================================
+
 date_heure <- format(Sys.time(), "%Y%m%d")
+cat("\n⏳ Lancement du scénario avec POMPAGE/TRANSFERT...\n")
+resultats_transfert <- run_hydrological_model(
+  pluvio_data = pluvio_base,
+  tab_etg_data = tab_etg_base,  
+  lambda_val = 0.05,
+  jours_pant = 5
+)
+
+# Sauvegarde
+saveRDS(resultats_transfert, file = "L0.05_Pant5_Transfert_2025.rds")
+cat("\n Sauvegarde réussie sous : L0.05_Pant5_Transfert_2025.rds\n")
 
 cat("\n⏳ Lancement du scénario EXPÉRIMENTAL (Vidange Remonde Nord)...\n")
 resultats_exp_remonde <- run_hydrological_model(
