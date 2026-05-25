@@ -100,11 +100,15 @@ ui <- fluidPage(
                  fluidRow(column(4, dateRangeInput("viz_dates_operations", "Plage :", start = "2010-01-01", end = "2025-12-31", width = "100%"))),
                  hr(), plotlyOutput("plot_operations", height = "600px")
         ),
-        
-        # --- ONGLET 5 : RÉSEAU HYDROGRAPHIQUE (CASCADE) ---
-        tabPanel("Topologie de la Cascade",
-                 br(), h4("Visualisation du sens d'écoulement des vidanges"),
-                 p("Cette carte illustre les connexions physiques entre les étangs. Les lignes pointillées rouges montrent vers quel exutoire (étang aval) l'eau se dirige."),
+        # --- ONGLET 5 : RÉSEAU HYDROGRAPHIQUE (CASCADE CHRONOLOGIQUE) ---
+        tabPanel("Topologie et Chronologie de la Cascade",
+                 br(), h4("Visualisation spatio-temporelle des vidanges"),
+                 p("Cette carte illustre le sens d'écoulement (lignes rouges) et l'ordre chronologique des vidanges (couleurs et numéros) sur la période sélectionnée."),
+                 
+                 fluidRow(
+                   column(5, dateRangeInput("dates_cascade", "Période d'analyse des vidanges :", 
+                                            start = "2023-09-01", end = "2024-03-31", width = "100%"))
+                 ),
                  hr(), 
                  leafletOutput("map_cascade", height = "700px")
         ),
@@ -130,6 +134,26 @@ ui <- fluidPage(
                  h4("Bilan du Ruissellement sur la période sélectionnée"),
                  # Le tableau récapitulatif
                  DTOutput("table_cr_resume")
+        ),
+        # --- ONGLET 7 : ANALYSE ÉVAPORATION (P-ETP) ---
+        tabPanel("Analyse Évaporation (P - ETP)",
+                 br(),
+                 h4("Analyse Événementielle des Pertes d'Eau (Modèles vs Terrain)"),
+                 p("Ce graphique affiche le Ratio d'Évaporation (Perte constatée divisée par le Déficit Météo théorique). 100% signifie que la baisse de l'eau correspond exactement au calcul climatique P-ETP."),
+                 
+                 fluidRow(
+                   column(4, dateRangeInput("dates_evap", "Filtrer la période estivale :", 
+                                            start = "2010-01-01", end = "2025-12-31", width = "100%")),
+                   column(4, numericInput("lissage_jours_evap", "Fenêtre de calcul (jours cumulés) :", 
+                                          value = 3, min = 1, max = 15, step = 1, width = "100%"))
+                 ),
+                 
+                 hr(),
+                 plotlyOutput("plot_evap_journalier", height = "500px"),
+                 
+                 hr(),
+                 h4("Bilan des pertes sur la période sélectionnée"),
+                 DTOutput("table_evap_resume")
         )
       )
     )
@@ -170,10 +194,19 @@ server <- function(input, output, session) {
     updateSelectInput(session, "grid_etang", choices = etangs)
   })
   
-  # --- Chargement géométrie pour la carte (simulation fictive du st_read si tu l'as dans importation) ---
+  # --- Chargement géométrie pour la carte ---
   etgs_shape <- reactive({
-    # Assure-toi que ce fichier correspond bien à ta couche spatiale chargée dans ton projet
-    tryCatch(st_read("data/shape/Etangs_Chalamont.shp", quiet = TRUE), error = function(e) NULL)
+    tryCatch({
+      # 1. On lit le fichier depuis ton dossier SIG
+      shp <- st_read("app/SIG/ETG.gpkg", quiet = TRUE)
+      
+      # 2. LA CORRECTION EST ICI : On le transforme en WGS84 (EPSG:4326) pour Leaflet
+      st_transform(shp, crs = 4326)
+      
+    }, error = function(e) {
+      warning("Erreur lors du chargement du fichier SIG/ETG.gpkg")
+      return(NULL)
+    })
   })
   
   # =======================================================
@@ -372,62 +405,82 @@ server <- function(input, output, session) {
   })
   
   # =======================================================
-  # ONGLET 5 : CARTE TOPOLOGIQUE DE LA CASCADE
+  # ONGLET 5 : CARTE TOPOLOGIQUE ET CHRONOLOGIQUE
   # =======================================================
   
   output$map_cascade <- renderLeaflet({
-    # On vérifie que le Shapefile est bien chargé
-    req(etgs_shape())
+    req(etgs_shape(), exists("tab_etg_base"), get_active_sim()$liste_finale, input$dates_cascade)
     shp <- etgs_shape()
     
-    # On vérifie que tab_etg_base (qui contient la colonne Exutoire_1) existe bien
-    req(exists("tab_etg_base"))
+    # 1. Extraction des données de simulation de la période
+    df_all <- bind_rows(get_active_sim()$liste_finale, .id = "NOM")
     
-    # 1. Jointure : On ajoute l'info de l'Exutoire à la géométrie
+    # 2. Recherche de la PREMIÈRE date de vidange de chaque étang sur la période
+    df_vidanges <- df_all %>%
+      filter(dat >= input$dates_cascade[1] & dat <= input$dates_cascade[2]) %>%
+      filter(Vidange == "oui" | Vol_Vidange_Jour > 0) %>%
+      group_by(NOM) %>%
+      summarise(Date_Vidange = min(dat), .groups = "drop") %>%
+      arrange(Date_Vidange) %>%
+      mutate(Ordre = row_number()) # On attribue le classement (1, 2, 3...)
+    
+    # 3. Jointure spatiale (Géométrie + Exutoire + Chronologie)
     shp_data <- shp %>% 
-      left_join(tab_etg_base %>% select(NOM, Exutoire_1), by = "NOM")
+      left_join(tab_etg_base %>% select(NOM, Exutoire_1), by = "NOM") %>%
+      left_join(df_vidanges, by = "NOM")
     
-    # 2. Calcul des centres géométriques (Centroïdes) de chaque étang
+    # Calcul des centres géométriques
     cents <- suppressWarnings(st_centroid(shp_data))
     coords <- st_coordinates(cents)
     cents_df <- data.frame(
       NOM = shp_data$NOM, 
       lng = coords[,1], 
       lat = coords[,2], 
-      Exutoire_1 = shp_data$Exutoire_1
+      Exutoire_1 = shp_data$Exutoire_1,
+      Date_Vidange = shp_data$Date_Vidange,
+      Ordre = shp_data$Ordre
     )
     
-    # 3. Création de la carte de base avec les polygones bleus
-    map <- leaflet(shp_data) %>% 
-      addProviderTiles(providers$CartoDB.Positron) %>%
-      addPolygons(fillColor = "#3498db", fillOpacity = 0.5, color = "#2980b9", weight = 2,
-                  label = ~paste0("Étang : ", NOM, " | Se vide dans : ", coalesce(Exutoire_1, "Sortie Réseau")))
+    # 4. Palette de couleurs (Gris si pas de vidange, Jaune -> Rouge pour l'ordre)
+    pal <- colorNumeric(palette = "YlOrRd", domain = cents_df$Ordre, na.color = "#bdc3c7")
     
-    # 4. Tracé des connexions (Les flèches/lignes de vidange)
+    # 5. Création de la carte
+    map <- leaflet(shp_data) %>% 
+      addProviderTiles(providers$CartoDB.Positron)
+    
+    # Dessin des polygones coloriés
+    map <- map %>% addPolygons(
+      fillColor = ~pal(Ordre), fillOpacity = 0.85, color = "#2c3e50", weight = 1,
+      label = ~paste0("Étang : ", NOM, 
+                      ifelse(!is.na(Ordre), 
+                             paste0(" | Vidange n°", Ordre, " (le ", format(Date_Vidange, "%d/%m/%Y"), ")"), 
+                             " | Aucune vidange sur la période"))
+    )
+    
+    # 6. Tracé des connexions (Flèches d'écoulement)
     for(i in 1:nrow(cents_df)) {
       src <- cents_df[i, ]
       dest_name <- src$Exutoire_1
       
-      # Si l'étang a un exutoire identifié (qui n'est pas la rivière finale)
       if(!is.na(dest_name) && dest_name != "OUTPUT" && dest_name %in% cents_df$NOM) {
         dest <- cents_df[cents_df$NOM == dest_name, ]
-        
-        # On trace une ligne pointillée rouge entre le centre de A et le centre de B
         map <- map %>% addPolylines(
-          lng = c(src$lng, dest$lng), 
-          lat = c(src$lat, dest$lat),
-          color = "#e74c3c", weight = 3, opacity = 0.9, dashArray = "5, 5",
-          label = paste(src$NOM, "➔", dest$NOM)
+          lng = c(src$lng, dest$lng), lat = c(src$lat, dest$lat),
+          color = "#2980b9", weight = 2, opacity = 0.8, dashArray = "5, 5"
         )
       }
     }
     
-    # 5. Ajout de petits points sur les centres pour un rendu propre
-    map <- map %>% addCircleMarkers(
-      data = cents_df, lng = ~lng, lat = ~lat, 
-      radius = 4, color = "#2c3e50", stroke = FALSE, fillOpacity = 1,
-      label = ~NOM
-    )
+    # 7. Ajout des Numéros géants sur les étangs
+    cents_avec_vidange <- cents_df %>% filter(!is.na(Ordre))
+    if(nrow(cents_avec_vidange) > 0) {
+      map <- map %>% addLabelOnlyMarkers(
+        data = cents_avec_vidange, lng = ~lng, lat = ~lat,
+        label = ~as.character(Ordre),
+        labelOptions = labelOptions(noHide = TRUE, textOnly = TRUE, direction = "center",
+                                    style = list("color" = "black", "font-weight" = "bold", "font-size" = "16px", "text-shadow" = "1px 1px 2px white"))
+      )
+    }
     
     return(map)
   })
@@ -503,25 +556,21 @@ server <- function(input, output, session) {
     return(df_analyse)
   })
   
-  # 2. Le graphique (Nuage de points)
+  # 2. Le graphique (Nuage de points) RUISSELLEMENT
   output$plot_cr_journalier <- renderPlotly({
     df <- data_ruissellement()
     req(input$dates_ruissellement, input$lissage_jours)
     
-    # Filtrage par les dates sélectionnées
     df <- df %>% filter(dat >= input$dates_ruissellement[1] & dat <= input$dates_ruissellement[2])
-    # Filtrage uniquement sur les orages
     df <- df %>% filter(Est_Orage_Valide == TRUE)
     
-    if(nrow(df) == 0) return(plot_ly() %>% layout(title = paste("Aucun orage valide sur cette période (fenêtre de", input$lissage_jours, "jours).")))
+    # CORRECTION : Création propre du graphique vide pour éviter l'erreur "No trace type"
+    if(nrow(df) == 0) return(plot_ly(type = 'scatter', mode = 'markers') %>% layout(title = paste("Aucun orage valide sur cette période (fenêtre de", input$lissage_jours, "jours).")))
     
     p <- ggplot(df, aes(x = dat)) +
-      # Points du Terrain (en Vert)
       geom_point(aes(y = Pseudo_CR_Terrain, color = "Sonde (Terrain)", text = paste("Date:", dat, "<br>Pluie (", input$lissage_jours, "j):", round(RR,1), "mm<br>CR Terrain:", round(Pseudo_CR_Terrain,1), "%")), size = 3, alpha = 0.8) +
-      # Points du Scénario 1 (en Bleu)
       geom_point(aes(y = CR_Mod1_Pct, color = "Scénario 1 (Base)", text = paste("Date:", dat, "<br>Pluie (", input$lissage_jours, "j):", round(RR,1), "mm<br>CR Modèle 1:", round(CR_Mod1_Pct,1), "%")), size = 2, shape = 17, alpha = 0.8)
     
-    # Points du Scénario 2 (en Rouge)
     if(any(!is.na(df$CR_Mod2_Pct))) {
       p <- p + geom_point(aes(y = CR_Mod2_Pct, color = "Scénario 2 (Comparaison)", text = paste("Date:", dat, "<br>Pluie (", input$lissage_jours, "j):", round(RR,1), "mm<br>CR Modèle 2:", round(CR_Mod2_Pct,1), "%")), size = 2, shape = 15, alpha = 0.8)
     }
@@ -530,7 +579,8 @@ server <- function(input, output, session) {
       labs(title = paste("Comparaison des taux de ruissellement (fenêtre de", input$lissage_jours, "jours)"), x = "Date", y = "Coefficient de Ruissellement (%)", color = "Légende") +
       scale_color_manual(values = c("Sonde (Terrain)" = "#27ae60", "Scénario 1 (Base)" = "#2980b9", "Scénario 2 (Comparaison)" = "#e74c3c"))
     
-    ggplotly(p, tooltip = "text") %>% layout(hovermode = "closest")
+    # CORRECTION : suppressWarnings empêche la console de crier "Ignoring unknown aesthetics"
+    suppressWarnings(ggplotly(p, tooltip = "text") %>% layout(hovermode = "closest"))
   })
   
   # 3. Le tableau de synthèse interactif
@@ -575,46 +625,103 @@ server <- function(input, output, session) {
               rownames = FALSE, 
               class = 'cell-border stripe')
   })
-  # --- ONGLET 7 : GRILLE 3x3 ---
-  output$plot_grid <- renderPlotly({
-    # Nécessite que tu aies chargé un environnement ou un fichier avec grid_res
-    # Si grid_res n'existe pas dans la mémoire R, le graphique ne s'affichera pas.
-    req(exists("grid_res")) 
-    req(grid_res$df)
+  # =======================================================
+  # ONGLET 7 : ANALYSE DE L'ÉVAPORATION (P - ETP) DYNAMIQUE
+  # =======================================================
+  
+  # 1. Base de données réactive dédiée à l'évaporation
+  # 1. Base de données réactive dédiée à l'évaporation
+  data_evaporation <- reactive({
+    req(get_active_sim()$liste_finale, input$etang_choisi, input$lissage_jours_evap)
+    nom_etang <- input$etang_choisi
+    k_jours <- input$lissage_jours_evap
     
-    df <- grid_res$df %>% filter(NOM == input$grid_etang)
-    req(nrow(df) > 0)
+    df1 <- get_active_sim()$liste_finale[[nom_etang]]
+    df2 <- get_alt_sim()$liste_finale[[nom_etang]]
     
-    if (!is.null(input$grid_dates)) {
-      df <- df %>% filter(dat >= input$grid_dates[1] & dat <= input$grid_dates[2])
+    # ... [Code load_terrain et infos_etg identique] ...
+    df_terr <- load_terrain(nom_etang)
+    if (!is.null(df_terr) && nrow(df_terr) > 0) {
+      df_terr <- df_terr %>% select(dat, Volume_Reel_Sonde = Volume_Reel)
+    } else {
+      df_terr <- tibble(dat = as.Date(character()), Volume_Reel_Sonde = numeric())
+    }
+    infos_etg <- tab_etg_base %>% filter(NOM == nom_etang) %>% head(1)
+    req(nrow(infos_etg) > 0)
+    surface_eau <- infos_etg$SURFACE_eau
+    
+    df_analyse <- df1 %>%
+      left_join(df_terr, by = "dat") %>%
+      mutate(
+        Ecart_Jours = as.numeric(dat - lag(dat, 1)),
+        Delta_V_Reel_Brut = ifelse(Ecart_Jours == 1, Volume_Reel_Sonde - lag(Volume_Reel_Sonde, 1), NA),
+        Vol_Meteo_Direct_Brut = P_ETP * surface_eau * 10,
+        Perte_Mod1_Brut = ifelse(Vp_etp < 0, abs(Vp_etp) + Fuite_Reelle, Fuite_Reelle),
+        
+        # Marqueur binaire pour les jours d'intervention
+        Action_Humaine = ifelse(Vidange == "oui" | peche == "oui" | Vol_Vidange_Jour > 0, 1, 0)
+      ) %>%
+      mutate(
+        RR_lisse = rollsum(RR, k = k_jours, fill = NA, align = "right"),
+        Delta_V_Reel_lisse = rollsum(Delta_V_Reel_Brut, k = k_jours, fill = NA, align = "right"),
+        Vol_Meteo_Direct_lisse = rollsum(Vol_Meteo_Direct_Brut, k = k_jours, fill = NA, align = "right"),
+        Perte_Mod1_lisse = rollsum(Perte_Mod1_Brut, k = k_jours, fill = NA, align = "right"),
+        
+        # Vérifie si AUCUNE action humaine n'a eu lieu sur les k jours
+        Intervention_sur_fenetre = rollapply(Action_Humaine, width = k_jours, FUN = sum, fill = NA, align = "right", partial = FALSE),
+        
+        Perte_Terrain_Abs = ifelse(Delta_V_Reel_lisse < 0, abs(Delta_V_Reel_lisse), 0),
+        Deficit_Meteo_Abs = ifelse(Vol_Meteo_Direct_lisse < 0, abs(Vol_Meteo_Direct_lisse), 0),
+        
+        Coef_Evap_Terrain = ifelse(Deficit_Meteo_Abs > 0, (Perte_Terrain_Abs / Deficit_Meteo_Abs) * 100, NA),
+        Coef_Evap_Mod1 = ifelse(Deficit_Meteo_Abs > 0, (Perte_Mod1_lisse / Deficit_Meteo_Abs) * 100, NA),
+        
+        # Filtre strict : Pas de pluie significative, AUCUNE action humaine sur toute la fenêtre, déficit climatique validé
+        Est_Jour_Evap = (RR_lisse <= 0.5 & Intervention_sur_fenetre == 0 & Deficit_Meteo_Abs > 0 & Delta_V_Reel_lisse < 0 & !is.na(Coef_Evap_Terrain))
+      ) %>% 
+      select(dat, P_ETP, Deficit_Meteo_Abs, Est_Jour_Evap, Perte_Terrain_Abs, Perte_Mod1_lisse, Coef_Evap_Terrain, Coef_Evap_Mod1)
+    
+    # ... [Ajout Scénario 2 identique] ...
+    if (!is.null(df2)) {
+      df2_sub <- df2 %>% 
+        mutate(Perte_Mod2_Brut = ifelse(Vp_etp < 0, abs(Vp_etp) + Fuite_Reelle, Fuite_Reelle)) %>%
+        select(dat, Perte_Mod2_Brut) %>% 
+        mutate(Perte_Mod2_lisse = rollsum(Perte_Mod2_Brut, k = k_jours, fill = NA, align = "right"))
+      df_analyse <- df_analyse %>% 
+        left_join(df2_sub, by = "dat") %>%
+        mutate(Coef_Evap_Mod2 = ifelse(Deficit_Meteo_Abs > 0, (Perte_Mod2_lisse / Deficit_Meteo_Abs) * 100, NA))
+    } else {
+      df_analyse <- df_analyse %>% mutate(Perte_Mod2_lisse = NA, Coef_Evap_Mod2 = NA)
     }
     
-    terrain_dispo <- FALSE
-    df_terrain <- load_terrain(input$grid_etang)
-    if (!is.null(df_terrain)) {
-      df_terrain <- df_terrain %>% filter(dat >= input$grid_dates[1] & dat <= input$grid_dates[2])
-      terrain_dispo <- TRUE
-    }
+    return(df_analyse)
+  })
+  # 2. Le graphique (Nuage de points en %) EVAPORATION
+  output$plot_evap_journalier <- renderPlotly({
+    df <- data_evaporation()
+    req(input$dates_evap, input$lissage_jours_evap)
+    
+    df <- df %>% filter(dat >= input$dates_evap[1] & dat <= input$dates_evap[2])
+    df <- df %>% filter(Est_Jour_Evap == TRUE)
+    
+    # CORRECTION : Création propre du graphique vide
+    if(nrow(df) == 0) return(plot_ly(type = 'scatter', mode = 'markers') %>% layout(title = paste("Aucune période d'évaporation pure valide (fenêtre de", input$lissage_jours_evap, "jours).")))
     
     p <- ggplot(df, aes(x = dat)) +
-      geom_hline(aes(yintercept = Vmax), color = "black", linetype = "dashed", alpha = 0.6) +
-      geom_line(aes(y = BF, color = "Modèle (Grille)"), linewidth = 0.8) 
+      geom_point(aes(y = Coef_Evap_Terrain, color = "Sonde (Terrain)", text = paste("Date:", dat, "<br>Ratio Terrain:", round(Coef_Evap_Terrain,1), "%<br>Baisse Réelle:", round(Perte_Terrain_Abs,1), "m³<br>Déficit Théorique:", round(Deficit_Meteo_Abs,1), "m³")), size = 3, alpha = 0.8) +
+      geom_point(aes(y = Coef_Evap_Mod1, color = "Scénario 1 (Base)", text = paste("Date:", dat, "<br>Ratio Modèle 1:", round(Coef_Evap_Mod1,1), "%")), size = 2, shape = 17, alpha = 0.8)
     
-    if(terrain_dispo) {
-      p <- p + geom_line(data = df_terrain, aes(y = Volume_Reel, color = "Sonde (Terrain)"), linewidth = 0.8)
+    if(any(!is.na(df$Coef_Evap_Mod2))) {
+      p <- p + geom_point(aes(y = Coef_Evap_Mod2, color = "Scénario 2 (Comparaison)", text = paste("Date:", dat, "<br>Ratio Modèle 2:", round(Coef_Evap_Mod2,1), "%")), size = 2, shape = 15, alpha = 0.8)
     }
     
-    p <- p + facet_grid(Lambda_factor ~ Pant_factor) + 
-      scale_color_manual(values = c("Modèle (Grille)" = "#2980b9", "Sonde (Terrain)" = "#27ae60")) +
-      theme_bw() +
-      labs(title = paste("Matrice d'expérimentation -", input$grid_etang),
-           x = "Date", y = "Volume (m³)", color = "Légende") +
-      theme(
-        strip.background = element_rect(fill = "#ecf0f1", color = "#bdc3c7"),
-        strip.text = element_text(face = "bold", size = 11)
-      )
+    p <- p + theme_minimal() + 
+      geom_hline(yintercept = 100, linetype = "dashed", color = "black", alpha = 0.5) +
+      labs(title = paste("Ratio d'Évaporation (Fenêtre de", input$lissage_jours_evap, "jours)"), subtitle = "Ligne à 100% = Perte exacte prévue par la météo", x = "Date", y = "Ratio de Perte d'eau (%)", color = "Légende") +
+      scale_color_manual(values = c("Sonde (Terrain)" = "#f39c12", "Scénario 1 (Base)" = "#2980b9", "Scénario 2 (Comparaison)" = "#8e44ad"))
     
-    ggplotly(p, dynamicTicks = TRUE) %>% layout(hovermode = "x unified")
+    # CORRECTION : Masque les faux avertissements
+    suppressWarnings(ggplotly(p, tooltip = "text") %>% layout(hovermode = "closest"))
   })
 }
 
@@ -622,3 +729,10 @@ server <- function(input, output, session) {
 # LANCEMENT DE L'APPLICATION
 # =======================================================
 shinyApp(ui = ui, server = server)
+
+
+
+
+
+
+
