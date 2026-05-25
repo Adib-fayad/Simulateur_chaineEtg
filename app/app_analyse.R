@@ -101,28 +101,25 @@ ui <- fluidPage(
                  hr(), plotlyOutput("plot_operations", height = "600px")
         ),
         
-        # --- ONGLET 5 : CARTE ---
-        tabPanel("Carte Dynamique",
-                 br(), h4("Évolution spatiale du bassin versant"),
-                 fluidRow(
-                   column(5, uiOutput("ui_calendrier_carte"), uiOutput("ui_slider_carte")),
-                   column(5, offset = 1,
-                          radioButtons("color_carte", "Couleur de fond :", choices = c("Taux de remplissage" = "volume", "État du sol (CN)" = "etat_sol"), selected = "volume"),
-                          checkboxGroupInput("overlay_carte", "Calques :", choices = c("Masquer les étangs en Assec" = "statut", "Afficher le Ruissellement" = "ruissellement"), selected = c("statut", "ruissellement")))
-                 ),
-                 hr(), leafletOutput("map_etangs", height = "700px")
+        # --- ONGLET 5 : RÉSEAU HYDROGRAPHIQUE (CASCADE) ---
+        tabPanel("Topologie de la Cascade",
+                 br(), h4("Visualisation du sens d'écoulement des vidanges"),
+                 p("Cette carte illustre les connexions physiques entre les étangs. Les lignes pointillées rouges montrent vers quel exutoire (étang aval) l'eau se dirige."),
+                 hr(), 
+                 leafletOutput("map_cascade", height = "700px")
         ),
-        
         # --- ONGLET 6 : RUISSELLEMENT (ÉVÉNEMENTIEL) ---
         tabPanel("Indicateurs de Ruissellement",
                  br(),
                  h4("Analyse Événementielle du Ruissellement (Modèles vs Terrain)"),
-                 p("Ce nuage de points compare le Coefficient de Ruissellement (CR) journalier entre la réalité (sonde) et vos deux scénarios, uniquement lors des jours d'orage."),
+                 p("Ce nuage de points compare le Coefficient de Ruissellement (CR) entre la réalité (sonde) et vos deux scénarios, uniquement lors des jours d'orage."),
                  
-                 # Choix de la période spécifique à cette analyse
+                 # Choix de la période ET du lissage dynamique
                  fluidRow(
                    column(4, dateRangeInput("dates_ruissellement", "Filtrer la période d'analyse :", 
-                                            start = "2010-01-01", end = "2025-12-31", width = "100%"))
+                                            start = "2010-01-01", end = "2025-12-31", width = "100%")),
+                   column(4, numericInput("lissage_jours", "Fenêtre de calcul (jours cumulés) :", 
+                                          value = 2, min = 1, max = 10, step = 1, width = "100%"))
                  ),
                  
                  hr(),
@@ -133,18 +130,6 @@ ui <- fluidPage(
                  h4("Bilan du Ruissellement sur la période sélectionnée"),
                  # Le tableau récapitulatif
                  DTOutput("table_cr_resume")
-        ),
-        # --- ONGLET 7 : EXPÉRIMENTATION (LA GRILLE 3x3) ---
-        tabPanel("Plan d'Expérimentation (Grille 3x3)",
-                 br(),
-                 h4("Matrice d'analyse de sensibilité : Lambda vs Jours Pant"),
-                 p("Affiche les résultats matriciels si le fichier source de la grille est disponible."),
-                 fluidRow(
-                   column(3, selectInput("grid_etang", "Choisir l'étang cible :", choices = NULL)),
-                   column(3, dateRangeInput("grid_dates", "Fenêtre d'observation :", start = "2010-01-01", end = "2025-12-31"))
-                 ),
-                 hr(),
-                 plotlyOutput("plot_grid", height = "800px")
         )
       )
     )
@@ -386,67 +371,75 @@ server <- function(input, output, session) {
     ggplotly(p, tooltip = "text") %>% layout(hovermode = "closest") %>% config(displayModeBar = TRUE)
   })
   
-  # --- CARTE INTERACTIVE ---
-  output$ui_calendrier_carte <- renderUI({ req(get_active_sim()$liste_finale); df <- get_active_sim()$liste_finale[[1]]; dateInput("date_carte_calendrier", "Choisir une date précise :", min = min(df$dat), max = max(df$dat), value = min(df$dat), format = "dd/mm/yyyy", language = "fr", width = "100%") })
-  output$ui_slider_carte <- renderUI({ req(get_active_sim()$liste_finale); df <- get_active_sim()$liste_finale[[1]]; sliderInput("date_carte_slider", "Faire défiler ou animer :", min = min(df$dat), max = max(df$dat), value = min(df$dat), timeFormat = "%d/%m/%Y", animate = animationOptions(interval = 1000, loop = FALSE), width = "100%") })
-  observeEvent(input$date_carte_slider, { updateDateInput(session, "date_carte_calendrier", value = input$date_carte_slider) }, ignoreInit = TRUE)
-  observeEvent(input$date_carte_calendrier, { updateSliderInput(session, "date_carte_slider", value = as.Date(input$date_carte_calendrier)) }, ignoreInit = TRUE)
+  # =======================================================
+  # ONGLET 5 : CARTE TOPOLOGIQUE DE LA CASCADE
+  # =======================================================
   
-  output$map_etangs <- renderLeaflet({
+  output$map_cascade <- renderLeaflet({
+    # On vérifie que le Shapefile est bien chargé
     req(etgs_shape())
-    limites <- st_bbox(etgs_shape())
-    leaflet() %>% addProviderTiles(providers$CartoDB.Positron) %>% fitBounds(lng1 = as.numeric(limites["xmin"]), lat1 = as.numeric(limites["ymin"]), lng2 = as.numeric(limites["xmax"]), lat2 = as.numeric(limites["ymax"])) %>% addMapPane("polygones_pane", zIndex = 410) %>% addMapPane("bulles_pane", zIndex = 420)
-  })
-  
-  observe({
-    req(input$date_carte_slider, get_active_sim()$liste_finale, etgs_shape())
-    data_jour <- bind_rows(get_active_sim()$liste_finale, .id = "NOM") %>% filter(dat == input$date_carte_slider)
-    map_data <- etgs_shape() %>% left_join(data_jour, by = "NOM") 
-    map_data$Statut_Simu <- ifelse(is.na(map_data$Statut_Simu), "Evolage", map_data$Statut_Simu)
-    map_data$BF <- ifelse(is.na(map_data$BF), 0, map_data$BF)
-    map_data$Volume_R <- ifelse(is.na(map_data$Volume_R), 0, map_data$Volume_R)
-    map_data$Taux_Remplissage <- ifelse(!is.na(map_data$Vmax) & map_data$Vmax > 0, (map_data$BF / map_data$Vmax) * 100, 0)
-    map_data$Taux_Remplissage <- ifelse(map_data$Taux_Remplissage > 100, 100, map_data$Taux_Remplissage)
-    map_data <- map_data %>% mutate(Etat_Sol = case_when(round(CN_jour, 1) == round(CNI, 1) ~ "Sec (CN I)", round(CN_jour, 1) == round(CNIII, 1) ~ "Saturé (CN III)", TRUE ~ "Normal (CN II)"))
-    proxy <- leafletProxy("map_etangs") %>% clearShapes() %>% clearControls() %>% clearMarkers()
+    shp <- etgs_shape()
     
-    if (input$color_carte == "etat_sol") {
-      pal_fond <- colorFactor(palette = c("#f1c40f", "#2ecc71", "#2980b9"), levels = c("Sec (CN I)", "Normal (CN II)", "Saturé (CN III)"))
-      color_vals <- pal_fond(map_data$Etat_Sol)
-      proxy <- proxy %>% addLegend(position = "bottomright", pal = pal_fond, values = map_data$Etat_Sol, title = "État de Saturation (CN)", opacity = 1)
-      label_poly <- ~paste0(NOM, " | État du sol : ", Etat_Sol, " (CN = ", round(CN_jour, 1), ")")
-    } else {
-      pal_fond <- colorNumeric(palette = "Blues", domain = c(0, 100))
-      color_vals <- pal_fond(map_data$Taux_Remplissage)
-      proxy <- proxy %>% addLegend(position = "bottomright", pal = pal_fond, values = c(0, 100), title = "Taux Remplissage (%)", opacity = 1)
-      label_poly <- ~paste0(NOM, " | Rempli à ", round(Taux_Remplissage), "% | Statut: ", Statut_Simu)
-    }
+    # On vérifie que tab_etg_base (qui contient la colonne Exutoire_1) existe bien
+    req(exists("tab_etg_base"))
     
-    vars_overlay <- input$overlay_carte 
-    if (!is.null(vars_overlay) && "statut" %in% vars_overlay) {
-      color_vals <- ifelse(map_data$Statut_Simu == "Assec", "#e67e22", color_vals) 
-      proxy <- proxy %>% addLegend(position = "bottomleft", colors = c("#e67e22"), labels = c("Assec Planifié"), title = "Gestion", opacity = 1)
-    }
+    # 1. Jointure : On ajoute l'info de l'Exutoire à la géométrie
+    shp_data <- shp %>% 
+      left_join(tab_etg_base %>% select(NOM, Exutoire_1), by = "NOM")
     
-    proxy %>% addPolygons(data = map_data, fillColor = color_vals, fillOpacity = 0.85, color = "#2c3e50", weight = 1, label = label_poly, highlightOptions = highlightOptions(weight = 4, color = "white", bringToFront = TRUE), options = pathOptions(pane = "polygones_pane"))
+    # 2. Calcul des centres géométriques (Centroïdes) de chaque étang
+    cents <- suppressWarnings(st_centroid(shp_data))
+    coords <- st_coordinates(cents)
+    cents_df <- data.frame(
+      NOM = shp_data$NOM, 
+      lng = coords[,1], 
+      lat = coords[,2], 
+      Exutoire_1 = shp_data$Exutoire_1
+    )
     
-    if (!is.null(vars_overlay) && "ruissellement" %in% vars_overlay) {
-      map_centroids <- suppressWarnings(st_centroid(map_data))
-      map_ruiss <- map_centroids %>% filter(Volume_R > 10)
-      if (nrow(map_ruiss) > 0) {
-        proxy %>% addCircleMarkers(data = map_ruiss, radius = ~pmax(5, sqrt(Volume_R) / 10), fillColor = "#00d2d3", color = "#0097e6", weight = 2, fillOpacity = 0.9, label = ~paste0(" APPORT PLUIE : ", round(Volume_R), " m³ ruisselés !"), options = pathOptions(pane = "bulles_pane"))
+    # 3. Création de la carte de base avec les polygones bleus
+    map <- leaflet(shp_data) %>% 
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(fillColor = "#3498db", fillOpacity = 0.5, color = "#2980b9", weight = 2,
+                  label = ~paste0("Étang : ", NOM, " | Se vide dans : ", coalesce(Exutoire_1, "Sortie Réseau")))
+    
+    # 4. Tracé des connexions (Les flèches/lignes de vidange)
+    for(i in 1:nrow(cents_df)) {
+      src <- cents_df[i, ]
+      dest_name <- src$Exutoire_1
+      
+      # Si l'étang a un exutoire identifié (qui n'est pas la rivière finale)
+      if(!is.na(dest_name) && dest_name != "OUTPUT" && dest_name %in% cents_df$NOM) {
+        dest <- cents_df[cents_df$NOM == dest_name, ]
+        
+        # On trace une ligne pointillée rouge entre le centre de A et le centre de B
+        map <- map %>% addPolylines(
+          lng = c(src$lng, dest$lng), 
+          lat = c(src$lat, dest$lat),
+          color = "#e74c3c", weight = 3, opacity = 0.9, dashArray = "5, 5",
+          label = paste(src$NOM, "➔", dest$NOM)
+        )
       }
     }
+    
+    # 5. Ajout de petits points sur les centres pour un rendu propre
+    map <- map %>% addCircleMarkers(
+      data = cents_df, lng = ~lng, lat = ~lat, 
+      radius = 4, color = "#2c3e50", stroke = FALSE, fillOpacity = 1,
+      label = ~NOM
+    )
+    
+    return(map)
   })
-  
   # =======================================================
   # ONGLET 6 : ANALYSE DU RUISSELLEMENT (GRAPHIQUE + TABLEAU)
   # =======================================================
   
   # 1. Base de données réactive dédiée au ruissellement
   data_ruissellement <- reactive({
-    req(get_active_sim()$liste_finale, input$etang_choisi)
+    req(get_active_sim()$liste_finale, input$etang_choisi, input$lissage_jours)
     nom_etang <- input$etang_choisi
+    k_jours <- input$lissage_jours # <-- Lecture du paramètre dynamique
     
     df1 <- get_active_sim()$liste_finale[[nom_etang]]
     df2 <- get_alt_sim()$liste_finale[[nom_etang]]
@@ -464,27 +457,45 @@ server <- function(input, output, session) {
     surface_eau <- infos_etg$SURFACE_eau
     surface_bv_terre <- infos_etg$Surface_BV - infos_etg$SURFACE_eau
     
-    # Calcul des CR sur le Scénario 1 et le Terrain
+    # Calcul des volumes bruts puis lissage dynamique
     df_analyse <- df1 %>%
       left_join(df_terr, by = "dat") %>%
       mutate(
-        CR_Mod1_Pct = CR * 100,
-        Vol_R_Mod1 = Volume_R,
+        Vol_R_Mod1_Brut = Volume_R,
         Ecart_Jours = as.numeric(dat - lag(dat, 1)),
         Delta_V_Reel = ifelse(Ecart_Jours == 1, Volume_Reel_Sonde - lag(Volume_Reel_Sonde, 1), NA),
         Volume_Meteo_Direct = P_ETP * surface_eau * 10,
-        Volume_Residuel = Delta_V_Reel - Volume_Meteo_Direct,
-        Vol_Pluie_Sur_Terre = RR * surface_bv_terre * 10,
-        Pseudo_CR_Terrain = (Volume_Residuel / Vol_Pluie_Sur_Terre) * 100,
+        Volume_Residuel_Brut = Delta_V_Reel - Volume_Meteo_Direct,
+        Vol_Pluie_Sur_Terre_Brut = RR * surface_bv_terre * 10
+      ) %>%
+      # --- LISSAGE DYNAMIQUE (1 à 5 jours) ---
+      mutate(
+        RR_lisse = rollsum(RR, k = k_jours, fill = NA, align = "right"),
+        Vol_Pluie_Sur_Terre_lisse = rollsum(Vol_Pluie_Sur_Terre_Brut, k = k_jours, fill = NA, align = "right"),
+        Volume_Residuel_lisse = rollsum(Volume_Residuel_Brut, k = k_jours, fill = NA, align = "right"),
+        Vol_R_Mod1_lisse = rollsum(Vol_R_Mod1_Brut, k = k_jours, fill = NA, align = "right"),
         
-        # Le filtre magique : On ne retient que les vrais orages
-        Est_Orage_Valide = (RR >= 5 & Vidange == "non" & peche == "non" & Pseudo_CR_Terrain > 0  & !is.na(Pseudo_CR_Terrain))
-      ) %>% select(dat, RR, Est_Orage_Valide, Vol_Pluie_Sur_Terre, Pseudo_CR_Terrain, CR_Mod1_Pct, Vol_R_Mod1)
+        # Calcul des nouveaux CR sur la fenêtre choisie
+        Pseudo_CR_Terrain = (Volume_Residuel_lisse / Vol_Pluie_Sur_Terre_lisse) * 100,
+        CR_Mod1_Pct = (Vol_R_Mod1_lisse / Vol_Pluie_Sur_Terre_lisse) * 100,
+        
+        # Filtre de validation sur la pluie lissée
+        Est_Orage_Valide = (RR_lisse >= 5 & Vidange == "non" & peche == "non" & Pseudo_CR_Terrain > 0 & !is.na(Pseudo_CR_Terrain))
+      ) %>% 
+      select(dat, RR = RR_lisse, Est_Orage_Valide, Vol_Pluie_Sur_Terre = Vol_Pluie_Sur_Terre_lisse, Pseudo_CR_Terrain, CR_Mod1_Pct, Vol_R_Mod1 = Vol_R_Mod1_lisse)
     
-    # Ajout du Scénario 2 s'il existe
+    # Ajout et lissage du Scénario 2 s'il existe
     if (!is.null(df2)) {
-      df2_sub <- df2 %>% select(dat, CR_Mod2_Pct = CR, Vol_R_Mod2 = Volume_R) %>% mutate(CR_Mod2_Pct = CR_Mod2_Pct * 100)
-      df_analyse <- df_analyse %>% left_join(df2_sub, by = "dat")
+      df2_sub <- df2 %>% 
+        select(dat, Vol_R_Mod2_Brut = Volume_R) %>% 
+        mutate(Vol_R_Mod2_lisse = rollsum(Vol_R_Mod2_Brut, k = k_jours, fill = NA, align = "right"))
+      
+      df_analyse <- df_analyse %>% 
+        left_join(df2_sub, by = "dat") %>%
+        mutate(
+          CR_Mod2_Pct = (Vol_R_Mod2_lisse / Vol_Pluie_Sur_Terre) * 100,
+          Vol_R_Mod2 = Vol_R_Mod2_lisse
+        )
     } else {
       df_analyse <- df_analyse %>% mutate(CR_Mod2_Pct = NA, Vol_R_Mod2 = NA)
     }
@@ -495,28 +506,28 @@ server <- function(input, output, session) {
   # 2. Le graphique (Nuage de points)
   output$plot_cr_journalier <- renderPlotly({
     df <- data_ruissellement()
-    req(input$dates_ruissellement)
+    req(input$dates_ruissellement, input$lissage_jours)
     
-    # Filtrage par les dates sélectionnées par l'utilisateur
+    # Filtrage par les dates sélectionnées
     df <- df %>% filter(dat >= input$dates_ruissellement[1] & dat <= input$dates_ruissellement[2])
     # Filtrage uniquement sur les orages
     df <- df %>% filter(Est_Orage_Valide == TRUE)
     
-    if(nrow(df) == 0) return(plot_ly() %>% layout(title = "Aucun orage valide sur cette période."))
+    if(nrow(df) == 0) return(plot_ly() %>% layout(title = paste("Aucun orage valide sur cette période (fenêtre de", input$lissage_jours, "jours).")))
     
     p <- ggplot(df, aes(x = dat)) +
       # Points du Terrain (en Vert)
-      geom_point(aes(y = Pseudo_CR_Terrain, color = "Sonde (Terrain)", text = paste("Date:", dat, "<br>Pluie:", round(RR,1), "mm<br>CR Terrain:", round(Pseudo_CR_Terrain,1), "%")), size = 3, alpha = 0.8) +
+      geom_point(aes(y = Pseudo_CR_Terrain, color = "Sonde (Terrain)", text = paste("Date:", dat, "<br>Pluie (", input$lissage_jours, "j):", round(RR,1), "mm<br>CR Terrain:", round(Pseudo_CR_Terrain,1), "%")), size = 3, alpha = 0.8) +
       # Points du Scénario 1 (en Bleu)
-      geom_point(aes(y = CR_Mod1_Pct, color = "Scénario 1 (Base)", text = paste("Date:", dat, "<br>Pluie:", round(RR,1), "mm<br>CR Modèle 1:", round(CR_Mod1_Pct,1), "%")), size = 2, shape = 17, alpha = 0.8)
+      geom_point(aes(y = CR_Mod1_Pct, color = "Scénario 1 (Base)", text = paste("Date:", dat, "<br>Pluie (", input$lissage_jours, "j):", round(RR,1), "mm<br>CR Modèle 1:", round(CR_Mod1_Pct,1), "%")), size = 2, shape = 17, alpha = 0.8)
     
     # Points du Scénario 2 (en Rouge)
     if(any(!is.na(df$CR_Mod2_Pct))) {
-      p <- p + geom_point(aes(y = CR_Mod2_Pct, color = "Scénario 2 (Comparaison)", text = paste("Date:", dat, "<br>Pluie:", round(RR,1), "mm<br>CR Modèle 2:", round(CR_Mod2_Pct,1), "%")), size = 2, shape = 15, alpha = 0.8)
+      p <- p + geom_point(aes(y = CR_Mod2_Pct, color = "Scénario 2 (Comparaison)", text = paste("Date:", dat, "<br>Pluie (", input$lissage_jours, "j):", round(RR,1), "mm<br>CR Modèle 2:", round(CR_Mod2_Pct,1), "%")), size = 2, shape = 15, alpha = 0.8)
     }
     
     p <- p + theme_minimal() + 
-      labs(title = "Comparaison des taux de ruissellement (CR) par événement", x = "Date", y = "Coefficient de Ruissellement (%)", color = "Légende") +
+      labs(title = paste("Comparaison des taux de ruissellement (fenêtre de", input$lissage_jours, "jours)"), x = "Date", y = "Coefficient de Ruissellement (%)", color = "Légende") +
       scale_color_manual(values = c("Sonde (Terrain)" = "#27ae60", "Scénario 1 (Base)" = "#2980b9", "Scénario 2 (Comparaison)" = "#e74c3c"))
     
     ggplotly(p, tooltip = "text") %>% layout(hovermode = "closest")
