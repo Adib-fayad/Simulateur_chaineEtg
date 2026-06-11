@@ -4,3 +4,8 @@
 .httr-oauth
 .DS_Store
 .quarto
+GPKG_Sortie/
+SIG/
+archive simul/
+*.rds
+*.gpkg

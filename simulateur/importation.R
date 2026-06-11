@@ -9,24 +9,59 @@ library(lubridate)
 source("simulateur/fonctions.R") # On charge la boîte à outils (Script 3)
 
 # ==============================================================================
+# 0. CONFIGURATION DU MODÈLE (BASSIN ET MÉTÉO)
+# ==============================================================================
+# C'est ton tableau de bord : modifie ces 3 lignes pour changer de simulation !
+DOSSIER_BASSIN_ACTUEL <- "data/Chalamont_opti"         # Ex: "data/Chalamont"
+DOSSIER_METEO_ACTUEL  <- "data/meteo/DRIAS_NorESM1_REMO2015_RCP8.5"   # Ex: "data/meteo/Chalamont"
+CODE_METEO_ACTUEL     <- 2                    # Code dans centro_BV.csv (Joyeux = 23)
+
+# ==============================================================================
 # 1. PRÉPARATION DES DONNÉES ÉTANGS ET OCCUPATION DES SOLS
 # ==============================================================================
 
-#' Fonction pour générer le tableau des étangs selon le fichier CN choisi
-#' Cela permet de basculer facilement entre Lambda 0.20, 0.10 et 0.05
-generer_tab_etg <- function(chemin_fichier_cn = "data/OS_CN_0.05.csv") {
+generer_tab_etg <- function(dossier_bassin, chemin_fichier_cn = "data/OS_CN_0.05.csv") {
   
-  # 1. Chargement OS
-  os_data <- read.csv2("data/OS_BV_Etg_Chalamont.csv", dec = ".", sep = ",") %>%
+  # Le script construit les chemins dynamiquement en fonction du bassin choisi
+  chemin_os     <- paste0(dossier_bassin, "/OS_BV.csv")
+  chemin_etangs <- paste0(dossier_bassin, "/Etangs.csv")
+  chemin_assec  <- paste0(dossier_bassin, "/ASSEC_Final.csv")
+  chemin_peche  <- paste0(dossier_bassin, "/Vidange_Peche.csv")
+  
+  # LECTURE INTELLIGENTE : Devine le séparateur et nettoie l'encodage Windows
+  lire_csv_robuste <- function(chemin) {
+    if (!file.exists(chemin)) stop(paste("\n❌ ERREUR : Le fichier est introuvable ->", chemin))
+    ligne <- readLines(chemin, n = 1, warn = FALSE)
+    separateur <- ";" # Défaut
+    if (grepl(",", ligne) && !grepl(";", ligne)) separateur <- ","
+    if (grepl("\t", ligne)) separateur <- "\t"
+    
+    df <- read.table(chemin, sep = separateur, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, fill = TRUE)
+    
+    names(df) <- gsub("^ï\\.\\.", "", names(df))
+    names(df) <- gsub("^X\\.", "", names(df))
+    names(df) <- gsub("^\ufeff", "", names(df))
+    names(df) <- trimws(names(df))
+    
+    return(df)
+  }
+  
+  # 1. Chargement OS 
+  os_data <- lire_csv_robuste(chemin_os) %>%
     select(ClasseOS = 1, Etang = 2, Surface = 3) %>%
+    mutate(
+      Surface = as.numeric(gsub(",", ".", as.character(Surface))),
+      ClasseOS = as.numeric(as.character(ClasseOS))
+    ) %>%
     filter(ClasseOS < 23)
   
-  # 2. Chargement CN (dynamique selon le lambda)
-  tab_cn <- read.csv2(chemin_fichier_cn, sep = ";", encoding = "latin1")
+  # 2. Chargement CN 
+  tab_cn <- lire_csv_robuste(chemin_fichier_cn)
   
   # 3. Calcul du Curve Number pondéré par étang
   cnetg <- os_data %>%
     left_join(tab_cn, by = c("ClasseOS" = "Code_OS")) %>%
+    mutate(CN.sol.D.Fav = as.numeric(gsub(",", ".", as.character(CN.sol.D.Fav)))) %>%
     group_by(Etang) %>%
     summarise(
       Surface_BV = round(sum(Surface, na.rm = TRUE) / 10000, 1),
@@ -39,26 +74,35 @@ generer_tab_etg <- function(chemin_fichier_cn = "data/OS_CN_0.05.csv") {
     rename(NOM = Etang)
   
   # 4. Chargement des caractéristiques physiques et Assecs
-  etg_params <- read.csv2("data/Etangs_Chalamont.csv", header = TRUE, dec = ",", sep = ";") %>% 
-    filter(Chaine_etu == "oui") %>% 
-    select(-num_range("Assec", 2021:2025))
+  etg_params <- lire_csv_robuste(chemin_etangs) %>% 
+    select(NOM, SURFACE_eau, any_of(c("Exutoire_1", "Exutoire_2")), Profondeur, Vmax)
   
-  assec_data <- read.csv2("data/ASSEC_Final_2010_2025.csv", header = TRUE, sep = ";") %>% 
-    select(-Exutoire_1, -OBJECTID)
+  assec_data <- lire_csv_robuste(chemin_assec) 
+  
+  # --- SÉCURITÉ ANTI-PLANTAGE DYNAMIQUE ---
+  if (!"NOM" %in% names(assec_data)) stop(paste("\n❌ ERREUR : 'NOM' introuvable dans", chemin_assec))
+  if (!"NOM" %in% names(etg_params)) stop(paste("\n❌ ERREUR : 'NOM' introuvable dans", chemin_etangs))
+  
+  assec_data <- assec_data %>% select(-any_of(c("Exutoire_1", "OBJECTID")))
   
   # Fusion et calcul du Vmax
   etg_model <- assec_data %>% 
     inner_join(etg_params, by ="NOM") %>%
-    mutate(Vmax = ifelse(is.na(Vmax), SURFACE_eau * Profondeur_m * 10000, Vmax))
+    mutate(
+      Vmax = as.numeric(Vmax),
+      Profondeur = as.numeric(gsub(",", ".", as.character(Profondeur))),
+      SURFACE_eau = as.numeric(SURFACE_eau) / 10000, 
+      Vmax = ifelse(is.na(Vmax), SURFACE_eau * Profondeur * 10000, Vmax)
+    )
   
   # 5. Chargement des dates de Vidange/Pêche
-  vidange_raw <- read.csv("data/Vidange_Peche_2010_2025.csv", sep = ",")
+  vidange_raw <- lire_csv_robuste(chemin_peche)
   
   # 6. Assemblage final complet
   tab_etg_final <- cnetg %>%
     inner_join(etg_model, by = "NOM") %>% 
     select(-any_of("Vidange")) %>%
-    left_join(vidange_raw %>% select(-Exutoire_1, -OBJECTID), by = "NOM") %>%
+    left_join(vidange_raw %>% select(-any_of(c("Exutoire_1", "OBJECTID"))), by = "NOM") %>%
     mutate(
       jours_vidange = ceiling(SURFACE_eau),
       across(
@@ -74,29 +118,35 @@ generer_tab_etg <- function(chemin_fichier_cn = "data/OS_CN_0.05.csv") {
 # ==============================================================================
 # Génération des DEUX tableaux (Base et Modifié)
 # ==============================================================================
-tab_etg_base  <- generer_tab_etg("data/OS_CN_0.05.csv")
-tab_etg_modif <- generer_tab_etg("data/OS_CN_0.05_modif.csv")
+tab_etg_base  <- generer_tab_etg(dossier_bassin = DOSSIER_BASSIN_ACTUEL, chemin_fichier_cn = "data/OS_CN_0.05.csv")
+tab_etg_modif <- generer_tab_etg(dossier_bassin = DOSSIER_BASSIN_ACTUEL, chemin_fichier_cn = "data/OS_CN_0.05_modif.csv")
 
-print("✅ Préparation des paramètres terminée : Les 2 tableaux (Base et Modif) sont en mémoire.")
+print(paste("✅ Préparation terminée pour le bassin :", DOSSIER_BASSIN_ACTUEL))
 
 
 # ==============================================================================
-# 2. CHARGEMENT DE LA MÉTÉO (Fichier Unique Simplifié)
+# 2. CHARGEMENT DE LA MÉTÉO (Fichier Unique Simplifié et Dynamique)
 # ==============================================================================
 
-fichier_meteo <- "data/meteo/SAFRAN/Meteo_Dombes_Mise_A_Jour_Finale.csv"
+# Construction dynamique des chemins météo
+chemin_meteo <- paste0(DOSSIER_METEO_ACTUEL, "/Meteo.csv")
+chemin_centro <- paste0(DOSSIER_METEO_ACTUEL, "/centro_BV.csv")
 
-# Cible du Bassin Versant
-coordonnees <- read.csv("data/meteo/SAFRAN/centro_BV.csv", header = TRUE, sep = ",") %>% 
-  filter(CODE == 2)
+# Sécurité si le fichier n'a pas été renommé correctement
+if (!file.exists(chemin_meteo)) stop(paste("\n❌ ERREUR : Le fichier Météo est introuvable. As-tu bien renommé ton fichier en 'Meteo.csv' dans le dossier", DOSSIER_METEO_ACTUEL, "?"))
+if (!file.exists(chemin_centro)) stop(paste("\n❌ ERREUR : Le fichier centro_BV.csv est introuvable dans", DOSSIER_METEO_ACTUEL))
+
+print(paste("Lecture du fichier météo cible :", chemin_meteo))
+
+# Cible du Bassin Versant dynamique
+coordonnees <- read.csv(chemin_centro, header = TRUE, sep = ",") %>% 
+  filter(CODE == CODE_METEO_ACTUEL)
 
 X_ref <- coordonnees$LAMBX[1]
 Y_ref <- coordonnees$LAMBY[1]
 
-print("Lecture du fichier météo unique...")
-
 # On lit le fichier CSV standard 
-meteo_brute <- read.csv2(fichier_meteo, stringsAsFactors = FALSE) 
+meteo_brute <- read.csv2(chemin_meteo, stringsAsFactors = FALSE) 
 
 # Recherche de la maille la plus proche
 maille_proche <- meteo_brute %>%
@@ -109,21 +159,19 @@ maille_proche <- meteo_brute %>%
 le_bon_X <- maille_proche$LAMBX[1]
 le_bon_Y <- maille_proche$LAMBY[1]
 
-print(paste(" Maille SAFRAN capturée : X =", le_bon_X, "| Y =", le_bon_Y))
+print(paste("Maille Météo capturée : X =", le_bon_X, "| Y =", le_bon_Y))
 
 # Création de la série temporelle journalière brute
 pluvio_base <- meteo_brute %>%
   filter(LAMBX == le_bon_X & LAMBY == le_bon_Y) %>%
   rename(RR = PRELIQ) %>% 
   mutate(
-    # Gestion robuste des dates (20100101 ou 2010-01-01) et des virgules
     dat = as.Date(lubridate::parse_date_time(as.character(DATE), orders = c("ymd", "dmy", "Ymd", "Y-m-d"))),
     RR = as.numeric(gsub(",", ".", as.character(RR))),
     ETP_grille = as.numeric(gsub(",", ".", as.character(ETP))),
     P_ETP = RR - ETP_grille
   ) %>%
   select(dat, RR, ETP_grille, P_ETP) %>%
-  filter(between(dat, as.Date("2010-01-01"), as.Date("2025-12-31"))) %>%
+  filter(between(dat, as.Date("2026-01-01"), as.Date("2050-12-31"))) %>%
   arrange(dat)
-
-print("Série Pluvio SAFRAN 2010-2025 générée et prête pour le simulateur !")
+print("Série Pluvio générée et prête pour le simulateur !")
