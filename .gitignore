@@ -1,11 +1,11 @@
-.Rproj.user
-.Rhistory
-.RData
-.httr-oauth
-.DS_Store
-.quarto
-GPKG_Sortie/
+# Ignorer le dossier SIG complet
 SIG/
-archive simul/
-*.rds
-*.gpkg
+
+# Ignorer l'environnement R
+.RData
+.Rproj.user/
+.Rhistory
+app/.Rhistory
+
+# Ignorer les très gros exports si besoin (à toi de voir si tu veux garder cette ligne)
+GPKG_Sortie/
