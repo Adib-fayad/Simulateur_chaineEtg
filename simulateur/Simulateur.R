@@ -255,9 +255,9 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
 # 3. EXÉCUTION DU MODÈLE ET SAUVEGARDE DES SCÉNARIOS
 # ==============================================================================
 date_heure <- format(Sys.time(), "%Y%m%d")
-beta = 5
-RU = 200
-coef = 0.4
+beta = 3
+RU = 175
+coef = 0.35
 
 cat("\n Lancement du scenario de BASE (Modele RU INRAE)...\n")
 resultats_sim_base <- run_hydrological_model(
@@ -267,7 +267,7 @@ resultats_sim_base <- run_hydrological_model(
   beta_val = beta,     
   C_transfert = coef
 )
-nom_fichier_base <- paste0("Drias_RCP8.5_opti",beta,"_RU_",RU,"_Coef_",coef,"_", date_heure, ".rds")
+nom_fichier_base <- paste0("Analyse R",beta,"_RU_",RU,"_Coef_",coef,"_", date_heure, ".rds")
 saveRDS(resultats_sim_base, file = nom_fichier_base)
 
 cat(paste("\n SUCCES TOTAL ! Le fichier", nom_fichier_base, "est sauvegarde et pret pour l'application Shiny.\n"))

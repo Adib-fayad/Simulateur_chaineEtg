@@ -12,8 +12,8 @@ source("simulateur/fonctions.R") # On charge la boîte à outils (Script 3)
 # 0. CONFIGURATION DU MODÈLE (BASSIN ET MÉTÉO)
 # ==============================================================================
 # C'est ton tableau de bord : modifie ces 3 lignes pour changer de simulation !
-DOSSIER_BASSIN_ACTUEL <- "data/Chalamont_opti"         # Ex: "data/Chalamont"
-DOSSIER_METEO_ACTUEL  <- "data/meteo/DRIAS_NorESM1_REMO2015_RCP8.5"   # Ex: "data/meteo/Chalamont"
+DOSSIER_BASSIN_ACTUEL <- "data/Chalamont"         # Ex: "data/Chalamont"
+DOSSIER_METEO_ACTUEL  <- "data/meteo"   # Ex: "data/meteo/Chalamont"
 CODE_METEO_ACTUEL     <- 2                    # Code dans centro_BV.csv (Joyeux = 23)
 
 # ==============================================================================
@@ -172,6 +172,6 @@ pluvio_base <- meteo_brute %>%
     P_ETP = RR - ETP_grille
   ) %>%
   select(dat, RR, ETP_grille, P_ETP) %>%
-  filter(between(dat, as.Date("2026-01-01"), as.Date("2050-12-31"))) %>%
+  filter(between(dat, as.Date("2010-01-01"), as.Date("2025-12-31"))) %>%
   arrange(dat)
 print("Série Pluvio générée et prête pour le simulateur !")
