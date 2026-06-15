@@ -660,28 +660,25 @@ cat("======================================================\n")
 
 
 
-
-
 # ==============================================================================
-# SCRIPT D'ÉVALUATION DES 125 MODÈLES SUR UN ÉVÉNEMENT CIBLE
+# SCRIPT D'ÉVALUATION DES 125 MODÈLES SUR UN ÉVÉNEMENT CIBLE (EN MILLIMÈTRES)
 # Objectif : Créer un registre CSV spécifique à un étang et une date
 # ==============================================================================
 
 library(tidyverse)
 library(lubridate)
-library(stringr) # Très utile pour extraire du texte des noms de fichiers
+library(stringr) 
 
 # =========================================================
-# 1. PARAMÉTRAGE STRICT DE L'ÉVÉNEMENT (À modifier à chaque fois)
+# 1. PARAMÉTRAGE STRICT DE L'ÉVÉNEMENT
 # =========================================================
-nom_etang <- "REMONDET NORD" 
-date_debut_orage <- as.Date("2025-10-29")
-date_fin_orage   <- as.Date("2025-11-05") 
+nom_etang <- "CARRONNIER" 
+date_debut_orage <- as.Date("2025-09-20")
+date_fin_orage   <- as.Date("2025-09-25") 
 
-dossier_rds <- "Banque_Simulations_Globales" # Le dossier contenant tes 125 fichiers
+dossier_rds <- "Banque_Simulations_Globales" 
 
-# Nom du fichier CSV final généré automatiquement
-nom_csv_sortie <- paste0("Analyse_", gsub(" ", "_", nom_etang), "_", date_debut_orage, ".csv")
+nom_csv_sortie <- paste0("Analyse_mm_", gsub(" ", "_", nom_etang), "_", date_debut_orage, ".csv")
 
 print(paste("Démarrage de l'analyse... Génération prévue de :", nom_csv_sortie))
 
@@ -691,7 +688,6 @@ print(paste("Démarrage de l'analyse... Génération prévue de :", nom_csv_sort
 chemin_simu_cn <- "archive simul/L0.2_Pant5_CN_base_20260519.rds"
 simu_cn <- readRDS(chemin_simu_cn)
 
-# CORRECTION : On additionne Ruissellement Local + Apport Amont
 df_cn <- simu_cn$liste_finale[[nom_etang]] %>% 
   mutate(Vol_CN = Volume_R + Vamont) %>% 
   select(dat, Vol_CN)
@@ -703,10 +699,7 @@ df_sonde <- load_terrain(nom_etang) %>%
   select(dat, Volume_Reel) %>%
   mutate(Delta_Vol = Volume_Reel - lag(Volume_Reel, 1))
 
-# Liste qui va stocker les 125 résultats
 resultats_event <- list()
-
-# On récupère la liste exacte de tes 125 fichiers .rds
 liste_fichiers <- list.files(path = dossier_rds, pattern = "\\.rds$", full.names = TRUE)
 
 # =========================================================
@@ -714,27 +707,25 @@ liste_fichiers <- list.files(path = dossier_rds, pattern = "\\.rds$", full.names
 # =========================================================
 compteur <- 1
 
+# Création du facteur pour passer des m3 aux mm sur ce bassin spécifique
+facteur_conversion_mm <- surface_terre_ha * 10
+
 for (fichier in liste_fichiers) {
   
-  # A. Extraction des paramètres depuis le nom du fichier
-  # LA CORRECTION : On efface le ".rds" à la fin du nom pour qu'il ne pollue pas la recherche
   nom_base <- str_remove(basename(fichier), "\\.rds$") 
-  
   beta_val <- str_extract(nom_base, "(?<=Beta)\\d+")
   ru_val   <- str_extract(nom_base, "(?<=RU)\\d+")
   coef_val <- str_extract(nom_base, "(?<=Coef)[0-9.]+")
   hypo_str <- paste0(coef_val, "/", ru_val, "/", beta_val)
   
   cat(sprintf("\rAnalyse du fichier %d/%d : %s", compteur, length(liste_fichiers), hypo_str))
-  # B. Chargement du modèle INRAE
+  
   simu_inrae <- readRDS(fichier)
   
-  # CORRECTION : La variable Vol_INRAE devient la somme du ruissellement et de la cascade
   df_inrae <- simu_inrae$liste_finale[[nom_etang]] %>% 
     mutate(Vol_INRAE = Volume_R + Vamont) %>% 
     select(dat, RR, Vol_INRAE)
   
-  # C. Bilan de masse
   analyse_event <- df_inrae %>%
     left_join(df_cn, by = "dat") %>%
     left_join(df_sonde, by = "dat") %>%
@@ -746,7 +737,6 @@ for (fichier in liste_fichiers) {
       Ruissellement_Sonde_Brut = replace_na(Ruissellement_Sonde_Brut, 0)
     )
   
-  # D. Calcul des métriques
   vol_tot_pluie <- sum(analyse_event$RR * surface_terre_ha * 10, na.rm = TRUE)
   vol_tot_inrae <- sum(analyse_event$Vol_INRAE, na.rm = TRUE)
   vol_tot_cn    <- sum(analyse_event$Vol_CN, na.rm = TRUE)
@@ -755,21 +745,21 @@ for (fichier in liste_fichiers) {
   rmse_inrae <- sqrt(mean((analyse_event$Vol_INRAE - analyse_event$Ruissellement_Sonde_Brut)^2, na.rm = TRUE))
   rmse_cn    <- sqrt(mean((analyse_event$Vol_CN - analyse_event$Ruissellement_Sonde_Brut)^2, na.rm = TRUE))
   
-  # E. Enregistrement de la ligne
+  # Conversion et enregistrement direct en mm
   resultats_event[[compteur]] <- data.frame(
     Date_Analyse = format(Sys.time(), "%Y-%m-%d %H:%M"),
     hypothese = hypo_str,
     Etang = nom_etang,
     Date_Debut_Orage = date_debut_orage,
     Date_Fin_Orage = date_fin_orage,
-    Pluie_Total_BV_m3 = round(vol_tot_pluie, 0),
-    Ruissellement_Reel_Sonde_m3 = round(vol_tot_reel, 0),
-    Volume_Calcule_INRAE_m3 = round(vol_tot_inrae, 0),
-    Volume_Calcule_CN_m3 = round(vol_tot_cn, 0),
-    Biais_Global_INRAE = round(vol_tot_inrae - vol_tot_reel, 0),
-    Biais_Global_CN = round(vol_tot_cn - vol_tot_reel, 0),
-    RMSE_INRAE_m3 = round(rmse_inrae, 0),
-    RMSE_CN_m3 = round(rmse_cn, 0)
+    Pluie_Total_BV_mm = round(vol_tot_pluie / facteur_conversion_mm, 2),
+    Ruissellement_Reel_Sonde_mm = round(vol_tot_reel / facteur_conversion_mm, 2),
+    Volume_Calcule_INRAE_mm = round(vol_tot_inrae / facteur_conversion_mm, 2),
+    Volume_Calcule_CN_mm = round(vol_tot_cn / facteur_conversion_mm, 2),
+    Biais_Global_INRAE_mm = round((vol_tot_inrae - vol_tot_reel) / facteur_conversion_mm, 2),
+    Biais_Global_CN_mm = round((vol_tot_cn - vol_tot_reel) / facteur_conversion_mm, 2),
+    RMSE_INRAE_mm = round(rmse_inrae / facteur_conversion_mm, 2),
+    RMSE_CN_mm = round(rmse_cn / facteur_conversion_mm, 2)
   )
   
   compteur <- compteur + 1
@@ -778,23 +768,12 @@ for (fichier in liste_fichiers) {
 # =========================================================
 # 4. EXPORTATION FINALE DU REGISTRE CSV
 # =========================================================
-# On fusionne les 125 lignes en un seul grand tableau
 df_final <- bind_rows(resultats_event)
 
-# On écrit le CSV d'un seul coup (beaucoup plus rapide et propre)
 write.table(df_final, file = nom_csv_sortie, sep = ";", row.names = FALSE, dec = ",")
 
 cat("\n\n======================================================\n")
-print(paste("✅ SUCCÈS ! Les 125 modèles ont été analysés pour l'événement."))
+print(paste("✅ SUCCÈS ! Les 125 modèles ont été convertis et analysés en mm."))
 print(paste("Fichier sauvegardé :", nom_csv_sortie))
 cat("======================================================\n")
-
-
-
-
-
-
-
-
-
 
