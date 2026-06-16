@@ -12,8 +12,8 @@ source("simulateur/fonctions.R") # On charge la boîte à outils (Script 3)
 # 0. CONFIGURATION DU MODÈLE (BASSIN ET MÉTÉO)
 # ==============================================================================
 # C'est ton tableau de bord : modifie ces 3 lignes pour changer de simulation !
-DOSSIER_BASSIN_ACTUEL <- "data/Chalamont"         # Ex: "data/Chalamont"
-DOSSIER_METEO_ACTUEL  <- "data/meteo"   # Ex: "data/meteo/Chalamont"
+DOSSIER_BASSIN_ACTUEL <- "data/Chalamont_opti"         # Ex: "data/Chalamont"
+DOSSIER_METEO_ACTUEL  <- "data/meteo/HadGEM2  RegCM4-6"   # Ex: "data/meteo/Chalamont"
 CODE_METEO_ACTUEL     <- 2                    # Code dans centro_BV.csv (Joyeux = 23)
 
 # ==============================================================================

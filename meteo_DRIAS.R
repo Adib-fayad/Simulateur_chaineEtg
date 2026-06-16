@@ -90,7 +90,7 @@ df_opt <- df_base
 df_alea <- df_base
 
 # Boucle temporelle de 2025 à 2050
-annees_futures <- 2025:2050
+annees_futures <- 2026:2070
 set.seed(42)
 
 for (annee in annees_futures) {

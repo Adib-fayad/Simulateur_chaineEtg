@@ -252,22 +252,97 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
 }
 
 # ==============================================================================
-# 3. EXÉCUTION DU MODÈLE ET SAUVEGARDE DES SCÉNARIOS
+# 3. BOUCLE D'EXÉCUTION AUTOMATIQUE SUR LES 6 SCÉNARIOS MÉTÉO
 # ==============================================================================
+
+# Paramètres hydrologiques
+beta = 4
+RU = 200
+coef = 0.2
 date_heure <- format(Sys.time(), "%Y%m%d")
-beta = 3
-RU = 175
-coef = 0.35
 
-cat("\n Lancement du scenario de BASE (Modele RU INRAE)...\n")
-resultats_sim_base <- run_hydrological_model(
-  pluvio_data = pluvio_base,
-  tab_etg_data = tab_etg_base,  
-  RU_defaut = RU, 
-  beta_val = beta,     
-  C_transfert = coef
+# Paramètre spatial (Code du bassin à adapter : Chalamont = 2, Joyeux = 23)
+CODE_METEO_ACTUEL <- 2 
+
+# Liste de tes dossiers météo (A modifier avec les noms exacts de tes dossiers)
+liste_dossiers_meteo <- c(
+  "data/meteo/MPI-ESM  REMO2009",
+  "data/meteo/IPSL-CM5A  WRF381P",
+  "data/meteo/IPSL-CM5A  RCA4",
+  "data/meteo/HadGEM2  RegCM4-6",
+  "data/meteo/HadGEM2  CCLM4-8-17",
+  "data/meteo/CNRM-CM5  ALADIN63"
 )
-nom_fichier_base <- paste0("Analyse R",beta,"_RU_",RU,"_Coef_",coef,"_", date_heure, ".rds")
-saveRDS(resultats_sim_base, file = nom_fichier_base)
 
-cat(paste("\n SUCCES TOTAL ! Le fichier", nom_fichier_base, "est sauvegarde et pret pour l'application Shiny.\n"))
+cat("\n===================================================================\n")
+cat("DÉMARRAGE DU TRAITEMENT EN LOT (BATCH) - 6 SCÉNARIOS MÉTÉO\n")
+cat("===================================================================\n")
+
+# Boucle principale
+for (dossier_meteo in liste_dossiers_meteo) {
+  
+  nom_scenario <- basename(dossier_meteo)
+  cat(paste("\n---> TRAITEMENT EN COURS :", nom_scenario, "<---\n"))
+  
+  # --- A. CHARGEMENT DYNAMIQUE DE LA MÉTÉO ---
+  chemin_meteo <- paste0(dossier_meteo, "/Meteo.csv")
+  chemin_centro <- paste0(dossier_meteo, "/centro_BV.csv")
+  
+  if (!file.exists(chemin_meteo)) {
+    cat(paste("ERREUR : Fichier Meteo.csv introuvable dans", dossier_meteo, "- Passage au suivant.\n"))
+    next # Passe au dossier suivant si le fichier n'existe pas
+  }
+  
+  # Extraction des coordonnées du centre
+  coordonnees <- read.csv(chemin_centro, header = TRUE, sep = ",") %>% 
+    filter(CODE == CODE_METEO_ACTUEL)
+  
+  X_ref <- coordonnees$LAMBX[1]
+  Y_ref <- coordonnees$LAMBY[1]
+  
+  meteo_brute <- read.csv2(chemin_meteo, stringsAsFactors = FALSE) 
+  
+  maille_proche <- meteo_brute %>%
+    select(LAMBX, LAMBY) %>%
+    distinct() %>%
+    mutate(distance = sqrt((LAMBX - X_ref)^2 + (LAMBY - Y_ref)^2)) %>%
+    arrange(distance) %>%
+    head(1)
+  
+  le_bon_X <- maille_proche$LAMBX[1]
+  le_bon_Y <- maille_proche$LAMBY[1]
+  
+  # Création de la série pluvio pour ce scénario spécifique
+  pluvio_scenario <- meteo_brute %>%
+    filter(LAMBX == le_bon_X & LAMBY == le_bon_Y) %>%
+    rename(RR = PRELIQ) %>% 
+    mutate(
+      dat = as.Date(lubridate::parse_date_time(as.character(DATE), orders = c("ymd", "dmy", "Ymd", "Y-m-d"))),
+      RR = as.numeric(gsub(",", ".", as.character(RR))),
+      ETP_grille = as.numeric(gsub(",", ".", as.character(ETP))),
+      P_ETP = RR - ETP_grille
+    ) %>%
+    select(dat, RR, ETP_grille, P_ETP) %>%
+    filter(between(dat, as.Date("2010-01-01"), as.Date("2070-12-31"))) %>% # Ajusté à 2070 pour couvrir la simu
+    arrange(dat)
+  
+  # --- B. LANCEMENT DE LA SIMULATION ---
+  resultats_sim <- run_hydrological_model(
+    pluvio_data = pluvio_scenario,
+    tab_etg_data = tab_etg_base,  # Utilise le tableau d'étangs chargé par le Script 1
+    RU_defaut = RU, 
+    beta_val = beta,      
+    C_transfert = coef
+  )
+  
+  # --- C. SAUVEGARDE PERSONNALISÉE ---
+  # Le nom du fichier contiendra le nom du dossier météo pour bien les différencier
+  nom_fichier_sortie <- paste0("Analyse_R", beta, "_RU_", RU, "_Coef_", coef, "_Meteo_", nom_scenario, "_", date_heure, ".rds")
+  saveRDS(resultats_sim, file = nom_fichier_sortie)
+  
+  cat(paste("Terminé ! Fichier sauvegardé :", nom_fichier_sortie, "\n"))
+}
+
+cat("\n===================================================================\n")
+cat("TOUS LES SCÉNARIOS SONT TERMINÉS AVEC SUCCÈS.\n")
+cat("===================================================================\n")
