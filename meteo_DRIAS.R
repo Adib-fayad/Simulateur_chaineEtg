@@ -1,113 +1,138 @@
-# library(tidyverse)
-# library(lubridate)
-# 
-# # 1. Chemin vers ton fichier texte DRIAS téléchargé
-# fichier_drias <- "data/meteo/DRIAS_NorESM1_REMO2015.txt"
-# 
-# # 2. CORRECTION : On utilise read_delim en précisant que le séparateur est un point-virgule (;)
-# print("Lecture du fichier brut DRIAS...")
-# drias_brut <- read_delim(fichier_drias, delim = ";", comment = "#", col_names = FALSE, show_col_types = FALSE)
-# 
-# # 3. On force les noms de colonnes
-# colnames(drias_brut) <- c("DATE", "LAMBX", "LAMBY", "tasminAdjust", "tasmaxAdjust", "tasAdjust",  "prtotAdjust", "prsnAdjust", "evspsblpotAdjust")
-# 
-# # 4. Traduction et CORRECTION DES UNITÉS (Vital pour le simulateur)
-# meteo_traduite <- drias_brut %>%
-#   mutate(
-#     DATE = ymd(DATE),               
-#     # DRIAS donne des kg/m2/s. On multiplie par 86400 (secondes par jour) pour avoir des mm/jour
-#     PRELIQ = as.numeric(prtotAdjust) * 86400,
-#     ETP = as.numeric(evspsblpotAdjust) * 86400,
-#     Tmoy= as.numeric(tasAdjust) -273.15,
-#     Tmax= as.numeric(tasmaxAdjust) -273.15,
-#     Tmin= as.numeric(tasminAdjust) -273.15
-#     
-#   ) %>%
-#   # On garde uniquement nos 5 colonnes de travail
-#   select(DATE, LAMBX, LAMBY, PRELIQ, ETP,Tmoy,Tmax,Tmin)
-# 
-# # 5. On exporte le fichier
-# chemin_sortie <- "data/meteo/Drias_RCP.csv"
-# write.csv2(meteo_traduite, chemin_sortie, row.names = FALSE)
-# 
-# print(paste("✅ Succès ! Fichier découpé, unités converties en mm/jour, et enregistré ici :", chemin_sortie))
-# 
-# 
-# 
-# 
-# 
-# 
-# # Chargement des librairies
-# library(tidyverse)
-# library(igraph)
-# 
-# # 1. Chargement dynamique du fichier ASSEC
-# chemin_assec_origine <- "data/Chalamont/ASSEC_Final.csv" # Modifie le chemin si besoin
-# print(paste("Lecture du fichier d'origine :", chemin_assec_origine))
-# 
-# df_base <- read.csv(chemin_assec_origine, sep = ";", stringsAsFactors = FALSE)
-# 
-# # Nettoyage des valeurs vides en "Evolage"
-# df_base[is.na(df_base) | df_base == ""] <- "Evolage"
-# 
-# # 2. Construction de l'arbre topologique (Réseau d'étangs)
-# liens <- df_base %>% 
-#   select(NOM, Exutoire_1) %>% 
-#   filter(!is.na(Exutoire_1) & Exutoire_1 != "OUTPUT" & Exutoire_1 != "")
-# g <- graph_from_data_frame(liens, directed = TRUE)
-# 
-# # Calcul de la "profondeur" de chaque étang dans la cascade
-# profondeurs <- distances(g, mode = "in")
-# profondeur_max_par_etang <- apply(profondeurs, 1, function(x) max(x[!is.infinite(x)]))
-# 
-# # 3. Création des dataframes de projection
-# df_opt <- df_base
-# df_alea <- df_base
-# 
-# # Boucle temporelle de 2025 à 2050
-# annees_futures <- 2025:2050
-# set.seed(42)
-# 
-# for (annee in annees_futures) {
-#   nom_col <- paste0("Assec", annee)
-#   
-#   # --- SCÉNARIO OPTIMISÉ ---
-#   assec_opt <- c()
-#   for (etang in df_opt$NOM) {
-#     if (etang %in% names(profondeur_max_par_etang)) {
-#       prof <- profondeur_max_par_etang[etang]
-#     } else {
-#       prof <- 0 
-#     }
-#     
-#     rotation_id <- prof %% 5
-#     annee_cycle <- (annee - 2025) %% 5
-#     
-#     if (annee_cycle == rotation_id) {
-#       assec_opt <- c(assec_opt, "Assec")
-#     } else {
-#       assec_opt <- c(assec_opt, "Evolage")
-#     }
-#   }
-#   df_opt[[nom_col]] <- assec_opt
-#   
-#   # --- SCÉNARIO ALÉATOIRE ---
-#   df_alea[[nom_col]] <- sample(c("Evolage", "Assec"), size = nrow(df_alea), prob = c(0.8, 0.2), replace = TRUE)
-# }
-# 
-# # 4. NOUVEAU : Nettoyage pour ne garder que 2025 à 2050
-# colonnes_a_garder <- c("OBJECTID", "NOM", "Exutoire_1", paste0("Assec", 2025:2050))
-# 
-# df_opt_final <- df_opt %>% select(all_of(colonnes_a_garder))
-# df_alea_final <- df_alea %>% select(all_of(colonnes_a_garder))
-# 
-# # 5. Sauvegarde des fichiers finaux
-# write.table(df_opt_final, "data/Chalamont/ASSEC_Optimise.csv", sep = ";", row.names = FALSE, quote = FALSE)
-# write.table(df_alea_final, "data/Chalamont/ASSEC_Aleatoire.csv", sep = ";", row.names = FALSE, quote = FALSE)
-# 
-# print("✅ Fichiers ASSEC_Optimise.csv et ASSEC_Aleatoire.csv générés avec succès ! (Uniquement de 2025 à 2050)")
-# 
-# 
+# ==============================================================================
+# TRAITEMENT EN LOT DES FICHIERS MÉTÉO DRIAS (PÉRIODE 2026-2070)
+# ==============================================================================
+
+library(tidyverse)
+library(lubridate)
+library(stringr)
+
+# 1. Définition des dossiers et fichiers sources
+dossier_meteo <- "data/meteo"
+chemin_centro_source <- file.path(dossier_meteo, "centro_BV.csv")
+
+# Détection de tous les fichiers .txt dans le dossier
+liste_fichiers <- list.files(path = dossier_meteo, pattern = "\\.txt$", full.names = TRUE)
+
+print(paste("Nombre de fichiers à traiter :", length(liste_fichiers)))
+
+# 2. Boucle de traitement automatisé
+for (fichier_drias in liste_fichiers) {
+  
+  print(paste("Traitement en cours :", basename(fichier_drias)))
+  
+  # Lecture du fichier brut
+  drias_brut <- read_delim(fichier_drias, delim = ";", comment = "#", col_names = FALSE, show_col_types = FALSE)
+  
+  # Forcer les noms de colonnes
+  colnames(drias_brut) <- c("DATE", "LAMBX", "LAMBY", "tasminAdjust", "tasmaxAdjust", "tasAdjust",  "prtotAdjust", "prsnAdjust", "evspsblpotAdjust")
+  
+  # Traduction, conversion des unités et filtrage des dates (2026 à 2070)
+  meteo_traduite <- drias_brut %>%
+    mutate(
+      DATE = ymd(DATE),
+      PRELIQ = as.numeric(prtotAdjust) * 86400,
+      ETP = as.numeric(evspsblpotAdjust) * 86400,
+      Tmoy = as.numeric(tasAdjust) - 273.15,
+      Tmax = as.numeric(tasmaxAdjust) - 273.15,
+      Tmin = as.numeric(tasminAdjust) - 273.15
+    ) %>%
+    filter(year(DATE) >= 2026 & year(DATE) <= 2070) %>%
+    select(DATE, LAMBX, LAMBY, PRELIQ, ETP, Tmoy, Tmax, Tmin)
+  
+  # 3. Création du dossier spécifique au scénario
+  nom_dossier <- str_remove(basename(fichier_drias), "\\.txt$")
+  chemin_dossier_sortie <- file.path(dossier_meteo, nom_dossier)
+  
+  # Création du répertoire
+  dir.create(chemin_dossier_sortie, showWarnings = FALSE)
+  
+  # 4. Exportation des données météorologiques filtrées
+  chemin_sortie_meteo <- file.path(chemin_dossier_sortie, "Meteo.csv")
+  write.csv2(meteo_traduite, chemin_sortie_meteo, row.names = FALSE)
+  
+  # 5. Copie du fichier centro_BV.csv
+  if (file.exists(chemin_centro_source)) {
+    chemin_centro_dest <- file.path(chemin_dossier_sortie, "centro_BV.csv")
+    file.copy(from = chemin_centro_source, to = chemin_centro_dest, overwrite = TRUE)
+  } else {
+    print("Avertissement : Le fichier centro_BV.csv est introuvable dans le dossier source.")
+  }
+}
+
+print("Fin de l'exécution. Les dossiers et fichiers filtrés ont été créés avec succès.")
+
+
+# Chargement des librairies
+library(tidyverse)
+library(igraph)
+
+# 1. Chargement dynamique du fichier ASSEC
+chemin_assec_origine <- "data/Chalamont/ASSEC_Final.csv" # Modifie le chemin si besoin
+print(paste("Lecture du fichier d'origine :", chemin_assec_origine))
+
+df_base <- read.csv(chemin_assec_origine, sep = ";", stringsAsFactors = FALSE)
+
+# Nettoyage des valeurs vides en "Evolage"
+df_base[is.na(df_base) | df_base == ""] <- "Evolage"
+
+# 2. Construction de l'arbre topologique (Réseau d'étangs)
+liens <- df_base %>%
+  select(NOM, Exutoire_1) %>%
+  filter(!is.na(Exutoire_1) & Exutoire_1 != "OUTPUT" & Exutoire_1 != "")
+g <- graph_from_data_frame(liens, directed = TRUE)
+
+# Calcul de la "profondeur" de chaque étang dans la cascade
+profondeurs <- distances(g, mode = "in")
+profondeur_max_par_etang <- apply(profondeurs, 1, function(x) max(x[!is.infinite(x)]))
+
+# 3. Création des dataframes de projection
+df_opt <- df_base
+df_alea <- df_base
+
+# Boucle temporelle de 2025 à 2050
+annees_futures <- 2025:2050
+set.seed(42)
+
+for (annee in annees_futures) {
+  nom_col <- paste0("Assec", annee)
+
+  # --- SCÉNARIO OPTIMISÉ ---
+  assec_opt <- c()
+  for (etang in df_opt$NOM) {
+    if (etang %in% names(profondeur_max_par_etang)) {
+      prof <- profondeur_max_par_etang[etang]
+    } else {
+      prof <- 0
+    }
+
+    rotation_id <- prof %% 5
+    annee_cycle <- (annee - 2025) %% 5
+
+    if (annee_cycle == rotation_id) {
+      assec_opt <- c(assec_opt, "Assec")
+    } else {
+      assec_opt <- c(assec_opt, "Evolage")
+    }
+  }
+  df_opt[[nom_col]] <- assec_opt
+
+  # --- SCÉNARIO ALÉATOIRE ---
+  df_alea[[nom_col]] <- sample(c("Evolage", "Assec"), size = nrow(df_alea), prob = c(0.8, 0.2), replace = TRUE)
+}
+
+# 4. NOUVEAU : Nettoyage pour ne garder que 2025 à 2050
+colonnes_a_garder <- c("OBJECTID", "NOM", "Exutoire_1", paste0("Assec", 2025:2050))
+
+df_opt_final <- df_opt %>% select(all_of(colonnes_a_garder))
+df_alea_final <- df_alea %>% select(all_of(colonnes_a_garder))
+
+# 5. Sauvegarde des fichiers finaux
+write.table(df_opt_final, "data/Chalamont/ASSEC_Optimise.csv", sep = ";", row.names = FALSE, quote = FALSE)
+write.table(df_alea_final, "data/Chalamont/ASSEC_Aleatoire.csv", sep = ";", row.names = FALSE, quote = FALSE)
+
+print("✅ Fichiers ASSEC_Optimise.csv et ASSEC_Aleatoire.csv générés avec succès ! (Uniquement de 2025 à 2050)")
+
+
 
 library(tidyverse)
 library(lubridate)
@@ -764,16 +789,3 @@ for (fichier in liste_fichiers) {
   
   compteur <- compteur + 1
 }
-
-# =========================================================
-# 4. EXPORTATION FINALE DU REGISTRE CSV
-# =========================================================
-df_final <- bind_rows(resultats_event)
-
-write.table(df_final, file = nom_csv_sortie, sep = ";", row.names = FALSE, dec = ",")
-
-cat("\n\n======================================================\n")
-print(paste("✅ SUCCÈS ! Les 125 modèles ont été convertis et analysés en mm."))
-print(paste("Fichier sauvegardé :", nom_csv_sortie))
-cat("======================================================\n")
-
