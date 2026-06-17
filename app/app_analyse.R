@@ -25,21 +25,21 @@ ui <- fluidPage(
   # CSS personnalisé pour des cartes KPI au look moderne
   tags$head(
     tags$style(HTML("
-      .kpi-card {
-        background-color: #f8f9fa;
-        border-left: 5px solid #2c3e50;
-        border-radius: 5px;
-        padding: 15px;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
+      .kpi-card { background-color: #f8f9fa; border-left: 5px solid #2c3e50; border-radius: 5px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
       .kpi-title { font-size: 14px; color: #7f8c8d; text-transform: uppercase; font-weight: bold; }
       .kpi-value { font-size: 24px; color: #2c3e50; font-weight: bold; margin-top: 5px; }
+      .kpi-desc { font-size: 12px; color: #95a5a6; margin-top: 5px; font-style: italic; }
       .kpi-card.blue { border-left-color: #3498db; }
       .kpi-card.green { border-left-color: #27ae60; }
       .kpi-card.orange { border-left-color: #e67e22; }
       .kpi-card.red { border-left-color: #e74c3c; }
+      .kpi-card.purple { border-left-color: #9b59b6; }
+      .kpi-card.dark { border-left-color: #34495e; }
       .info-box { background-color: #e8f4f8; border: 1px solid #b6d4fe; border-radius: 5px; padding: 10px; margin-bottom: 15px; color: #084298; font-weight: bold; text-align: center; }
+      .legend-box { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 12px; font-size: 12px; color: #495057; margin-top: 15px; }
+      .legend-box p { margin-bottom: 6px; line-height: 1.3; }
+      .legend-box b { color: #2c3e50; }
+      .section-title { margin-top: 30px; margin-bottom: 15px; font-weight: bold; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; }
     "))
   ),
   
@@ -52,14 +52,12 @@ ui <- fluidPage(
       p("Comparaison instantanée des modélisations pré-calculées."),
       hr(),
       
-      # --- NOUVEAU : LISTES DÉROULANTES DYNAMIQUES PAR DOSSIER ---
       selectInput("dossier_1", "📂 Dossier Principal :", choices = NULL),
       selectInput("fichier_rds_1", "📄 Scénario Principal :", choices = NULL),
       
       hr(),
       selectInput("dossier_2", "📂 Dossier Comparaison :", choices = NULL),
       selectInput("fichier_rds_2", "📄 Scénario Comparaison :", choices = NULL),
-      # ----------------------------------------------------------
       
       hr(),
       dateRangeInput("dates", "Période de simulation globale :", 
@@ -67,39 +65,35 @@ ui <- fluidPage(
       
       hr(),
       tags$h4("Filtre Spatial"),
-      selectInput("etang_choisi", "Cibler un étang :", choices = NULL)
+      selectInput("etang_choisi", "Cibler un étang :", choices = NULL),
+      
+      tags$div(class = "legend-box",
+               tags$h5("Légende des Modèles", style="margin-top: 0px; font-weight: bold; color: #2c3e50;"),
+               tags$p(tags$b("CNRM-CM5 ALADIN63 :"), " Modéré"),
+               tags$p(tags$b("MPI-ESM REMO2009 :"), " Scénario intermédiaire"),
+               tags$p(tags$b("IPSL-CM5A WRF381P :"), " Hiver très pluvieux, Été humide"),
+               tags$p(tags$b("IPSL-CM5A RCA4 :"), " Hiver très humide, Été extrême"),
+               tags$p(tags$b("HadGEM2 RegCM4-6 :"), " Très chaud, sécheresse modérée"),
+               tags$p(tags$b("HadGEM2 CCLM4-8-17 :"), " Extrême (Le plus chaud/sec en été)")
+      )
     ),
     
     mainPanel(
       width = 9,
       tabsetPanel(
         
-        # --- ONGLET 1 : COMPARAISON DES SCÉNARIOS ---
         tabPanel("Analyse Détaillée (Étang)", 
                  br(),
                  fluidRow(
                    column(4, selectInput("var_plot", "Variable à analyser :", 
-                                         choices = c("Volume stocké (BF) [m³]" = "BF",
-                                                     "Volume déversé (Vsortant) [m³]" = "Vsortant",
-                                                     "Pluviométrie (RR) [mm]" = "RR",
-                                                     "Ruissellement capté (Volume_R) [m³]" = "Volume_R",
-                                                     "Bilan Pluie-Évapo (Vp_etp) [m³]" = "Vp_etp"), 
-                                         width = "100%")),
-                   column(4, selectInput("time_step", "Lissage temporel :", 
-                                         choices = c("Journalier" = "day", "Hebdomadaire" = "week", "Mensuel" = "month", "Annuel" = "year"), 
-                                         width = "100%")),
-                   column(4, 
-                          uiOutput("ui_zoom_dates"),
-                          checkboxInput("show_comparison", "Afficher la courbe de comparaison", value = TRUE)
-                   )
+                                         choices = c("Volume stocké (BF) [m³]" = "BF", "Volume déversé (Vsortant) [m³]" = "Vsortant", "Pluviométrie (RR) [mm]" = "RR", "Ruissellement capté (Volume_R) [m³]" = "Volume_R", "Bilan Pluie-Évapo (Vp_etp) [m³]" = "Vp_etp"), width = "100%")),
+                   column(4, selectInput("time_step", "Lissage temporel :", choices = c("Journalier" = "day", "Hebdomadaire" = "week", "Mensuel" = "month", "Annuel" = "year"), width = "100%")),
+                   column(4, uiOutput("ui_zoom_dates"), checkboxInput("show_comparison", "Afficher la courbe de comparaison", value = TRUE))
                  ),
                  plotlyOutput("plot_calibration", height = "500px"),
-                 hr(),
-                 tags$h4("Indicateurs Clés de l'Étang"),
-                 uiOutput("kpi_cards_etang")
+                 hr(), tags$h4("Indicateurs Clés de l'Étang"), uiOutput("kpi_cards_etang")
         ),
         
-        # --- ONGLET 2 : EXUTOIRE FINAL ---
         tabPanel("Exutoire Final", 
                  br(), 
                  fluidRow(
@@ -115,30 +109,21 @@ ui <- fluidPage(
                  )
         ),
         
-        # --- ONGLET 3 : CALENDRIER DE GESTION ---
         tabPanel("Calendrier de Gestion",
                  br(),
                  fluidRow(column(4, dateRangeInput("viz_dates_gestion", "Plage temporelle :", start = "2026-01-01", end = "2035-12-31", width = "100%"))),
-                 p("Vue d'ensemble des assecs programmés et des interventions humaines sur le réseau."),
-                 plotlyOutput("plot_gantt_assec", height = "400px"),
-                 hr(),
-                 plotlyOutput("plot_operations", height = "400px")
+                 plotlyOutput("plot_gantt_assec", height = "400px"), hr(), plotlyOutput("plot_operations", height = "400px")
         ),
         
-        # --- ONGLET 4 : BILAN GLOBAL ---
         tabPanel("Bilan Chronologique Global",
                  br(),
                  fluidRow(
-                   column(4, dateRangeInput("dates_bilan_global", "Période d'analyse :", 
-                                            start = "2026-01-01", end = "2040-12-31", width = "100%")),
-                   column(4, selectInput("time_step_bilan", "Lissage temporel :", 
-                                         choices = c("Journalier" = "day", "Hebdomadaire" = "week", "Mensuel" = "month", "Annuel" = "year"), 
-                                         width = "100%"))
+                   column(4, dateRangeInput("dates_bilan_global", "Période d'analyse :", start = "2026-01-01", end = "2040-12-31", width = "100%")),
+                   column(4, selectInput("time_step_bilan", "Lissage temporel :", choices = c("Journalier" = "day", "Hebdomadaire" = "week", "Mensuel" = "month", "Annuel" = "year"), width = "100%"))
                  ),
                  plotlyOutput("plot_bilan_chrono", height = "650px")
         ),
         
-        # --- ONGLET 5 : BILAN ANNUEL PISCICOLE ---
         tabPanel("Bilan Annuel Piscicole",
                  br(),
                  fluidRow(
@@ -149,7 +134,13 @@ ui <- fluidPage(
                  plotlyOutput("plot_bilan_piscicole_pies", height = "500px")
         ),
         
-        # --- ONGLET 6 : PALMARÈS & ROBUSTESSE ---
+        # --- NOUVEL ONGLET : VULNÉRABILITÉ & CLIMAT ---
+        tabPanel("Vulnérabilité & Climat",
+                 br(),
+                 p("Analyse avancée des 11 indicateurs de vulnérabilité (moyennes calculées sur la période globale sélectionnée)."),
+                 uiOutput("vulnerabilite_ui")
+        ),
+        
         tabPanel("Palmarès & Robustesse",
                  br(),
                  p("Analyse comparative des fichiers CSV générés sur les événements d'orage."),
@@ -168,41 +159,26 @@ ui <- fluidPage(
 # =======================================================
 server <- function(input, output, session) {
   
-  # -------------------------------------------------------
-  # GESTION DES LISTES DÉROULANTES DYNAMIQUES (DOSSIERS -> FICHIERS)
-  # -------------------------------------------------------
+  tous_les_rds <- reactive({ list.files(pattern = "\\.rds$", recursive = TRUE) })
   
-  # 1. Scanner tous les fichiers RDS (même dans les sous-dossiers)
-  tous_les_rds <- reactive({
-    list.files(pattern = "\\.rds$", recursive = TRUE)
-  })
-  
-  # 2. Remplir les listes de dossiers au démarrage
   observe({
     fichiers <- tous_les_rds()
     if (length(fichiers) > 0) {
       dossiers <- unique(dirname(fichiers))
-      # Esthétique : Si un fichier est à la racine, dirname renvoie ".", on le renomme proprement
       noms_dossiers <- setNames(dossiers, ifelse(dossiers == ".", "Dossier Racine", dossiers))
-      
       updateSelectInput(session, "dossier_1", choices = noms_dossiers, selected = dossiers[1])
       updateSelectInput(session, "dossier_2", choices = c("Aucun" = "Aucun", noms_dossiers), selected = "Aucun")
     }
   })
   
-  # 3. Mettre à jour les fichiers du Scénario 1 selon le dossier 1 choisi
   observeEvent(input$dossier_1, {
     req(input$dossier_1)
     fichiers <- tous_les_rds()
-    # On filtre pour ne garder que les fichiers du dossier sélectionné
     fichiers_filtres <- fichiers[dirname(fichiers) == input$dossier_1]
-    
-    # On affiche juste le nom du fichier (basename) mais le système retient le chemin complet
     noms_fichiers <- setNames(fichiers_filtres, basename(fichiers_filtres))
     updateSelectInput(session, "fichier_rds_1", choices = noms_fichiers)
   })
   
-  # 4. Mettre à jour les fichiers du Scénario 2 selon le dossier 2 choisi
   observeEvent(input$dossier_2, {
     req(input$dossier_2)
     if(input$dossier_2 == "Aucun") {
@@ -215,16 +191,11 @@ server <- function(input, output, session) {
     }
   })
   
-  # Chargement effectif des données
   get_active_sim <- reactive({ req(input$fichier_rds_1); readRDS(input$fichier_rds_1) })
   get_alt_sim <- reactive({ 
     if(input$fichier_rds_2 == "Aucun" || is.null(input$fichier_rds_2)) return(NULL)
     readRDS(input$fichier_rds_2) 
   })
-  
-  # -------------------------------------------------------
-  # Reste du serveur inchangé
-  # -------------------------------------------------------
   
   observe({
     req(get_active_sim())
@@ -450,6 +421,127 @@ server <- function(input, output, session) {
       layout(showlegend = TRUE, margin = list(t = 20, b = 20, l = 0, r = 0))
   })
   
+  # --- CALCUL DES INDICATEURS DE VULNÉRABILITÉ ---
+  vulnerabilite_data <- reactive({
+    req(get_active_sim()$liste_finale, input$etang_choisi)
+    nom_etang <- input$etang_choisi
+    df <- get_active_sim()$liste_finale[[nom_etang]]
+    df_ex <- get_active_sim()$exutoire_data
+    df_all <- bind_rows(get_active_sim()$liste_finale, .id = "NOM")
+    
+    if (!is.null(input$dates)) {
+      df <- df %>% filter(dat >= input$dates[1] & dat <= input$dates[2])
+      df_ex <- df_ex %>% filter(dat >= input$dates[1] & dat <= input$dates[2])
+      df_all <- df_all %>% filter(dat >= input$dates[1] & dat <= input$dates[2])
+    }
+    
+    vmax_etang <- df$Vmax[1]
+    vmax_total_reseau <- sum(sapply(get_active_sim()$liste_finale, function(x) x$Vmax[1]))
+    
+    df <- df %>%
+      mutate(
+        annee = year(dat),
+        mois = month(dat),
+        Saison_Hydro = if_else(mois >= 10 & day(dat) >= 15 | mois > 10, annee + 1, annee)
+      )
+    
+    # 1. Pression Climatique Pure
+    df_hiver <- df %>% filter(mois %in% c(10,11,12,1,2,3)) %>%
+      group_by(Saison_Hydro) %>% summarise(Recharge = sum(RR, na.rm=TRUE) - sum(ETP_grille, na.rm=TRUE))
+    recharge_moy = mean(df_hiver$Recharge, na.rm=TRUE)
+    
+    df_ete <- df %>% filter(mois %in% c(6,7,8,9)) %>%
+      group_by(annee) %>%
+      summarise(Max_Sec = { rl <- rle(RR < 1); if(any(rl$values)) max(rl$lengths[rl$values]) else 0 })
+    seq_seche_moy = mean(df_ete$Max_Sec, na.rm=TRUE)
+    
+    df_aridite <- df %>% group_by(annee) %>%
+      summarise(P = sum(RR, na.rm=TRUE), E = sum(ETP_grille, na.rm=TRUE)) %>%
+      mutate(Indice = P / E)
+    aridite_moy = mean(df_aridite$Indice, na.rm=TRUE)
+    
+    # 2. Vulnérabilité Hydrologique
+    df_avril <- df %>% filter(mois == 4 & day(dat) == 1) %>% mutate(Taux = BF / Vmax)
+    secu_printemps = mean(df_avril$Taux, na.rm=TRUE) * 100
+    
+    df_def <- df %>% group_by(annee) %>% summarise(Jours_Def = sum(BF < 0.3 * Vmax, na.rm=TRUE))
+    defaillance_moy = mean(df_def$Jours_Def, na.rm=TRUE)
+    
+    df_fill <- df %>% group_by(Saison_Hydro) %>% arrange(dat) %>%
+      summarise(
+        Date_Debut = min(dat[mois == 10 & day(dat) == 15], na.rm=TRUE),
+        Date_80 = min(dat[BF >= 0.8 * Vmax & dat >= Date_Debut], na.rm=TRUE)
+      ) %>%
+      filter(!is.infinite(Date_Debut) & !is.infinite(Date_80)) %>%
+      mutate(Jours = as.numeric(Date_80 - Date_Debut))
+    time_to_fill_moy = mean(df_fill$Jours, na.rm=TRUE)
+    
+    # 3. Vulnérabilité Fonctionnelle
+    vol_r_tot <- sum(df$Volume_R, na.rm=TRUE)
+    vol_pluie_tot <- sum(df$RR * (df$Surface_BV - df$SURFACE_eau) * 10, na.rm=TRUE)
+    rendement_bv = (vol_r_tot / vol_pluie_tot) * 100
+    
+    df_ex_annee <- df_ex %>% mutate(annee = year(dat)) %>% group_by(annee) %>% summarise(V_ex = sum(Volume_Riviere, na.rm=TRUE))
+    gaspillage_moyen_annuel = mean(df_ex_annee$V_ex / vmax_total_reseau, na.rm=TRUE) * 100
+    
+    df_rupture <- df %>% group_by(annee) %>% summarise(Jours_Rupture = sum(Vsortant == 0 & Vol_Vidange_Jour == 0 & BF < Vmax, na.rm=TRUE))
+    rupture_moy = mean(df_rupture$Jours_Rupture, na.rm=TRUE)
+    
+    # 4. Vulnérabilité Agronomique
+    df_evap <- df %>% group_by(annee) %>% summarise(Vol_Evap = sum(abs(Evap_Reelle[Evap_Reelle < 0]), na.rm=TRUE))
+    poids_evap = mean(df_evap$Vol_Evap / vmax_etang, na.rm=TRUE)
+    
+    annees_assec <- df %>% filter(Statut_Simu == "Assec") %>% pull(annee) %>% unique()
+    if (length(annees_assec) > 0) {
+      annees_suivantes <- annees_assec + 1
+      reussites <- df %>% filter(annee %in% annees_suivantes & mois == 4 & day(dat) == 1) %>%
+        summarise(Succes = sum(BF >= 0.7 * Vmax, na.rm=TRUE), Total = n())
+      proba_assec = if(reussites$Total > 0) (reussites$Succes / reussites$Total) * 100 else NA
+    } else {
+      proba_assec = NA
+    }
+    
+    list(
+      recharge_moy = recharge_moy, seq_seche_moy = seq_seche_moy, aridite_moy = aridite_moy,
+      secu_printemps = secu_printemps, defaillance_moy = defaillance_moy, time_to_fill_moy = time_to_fill_moy,
+      rendement_bv = rendement_bv, gaspillage_moyen_annuel = gaspillage_moyen_annuel, rupture_moy = rupture_moy,
+      poids_evap = poids_evap, proba_assec = proba_assec
+    )
+  })
+  
+  output$vulnerabilite_ui <- renderUI({
+    res <- vulnerabilite_data()
+    
+    div(
+      div(class="section-title", "1. Pression Climatique Pure (Analyse des intrants)"),
+      fluidRow(
+        column(4, div(class = "kpi-card blue", div(class = "kpi-title", "Déficit Recharge Hivernale"), div(class = "kpi-value", paste(round(res$recharge_moy, 1), "mm")), div(class="kpi-desc", "Bilan Pluie - ETP d'octobre à mars."))),
+        column(4, div(class = "kpi-card orange", div(class = "kpi-title", "Séquences Sèches Estivales"), div(class = "kpi-value", paste(round(res$seq_seche_moy, 0), "jours consécutifs")), div(class="kpi-desc", "Pluie < 1mm (Juin à Septembre)."))),
+        column(4, div(class = "kpi-card red", div(class = "kpi-title", "Indice d'Aridité (P / ETP)"), div(class = "kpi-value", round(res$aridite_moy, 2)), div(class="kpi-desc", "Glissement vers un climat semi-aride.")))
+      ),
+      
+      div(class="section-title", "2. Vulnérabilité Hydrologique (États des stocks)"),
+      fluidRow(
+        column(4, div(class = "kpi-card green", div(class = "kpi-title", "Sécurisation Printanière"), div(class = "kpi-value", paste(round(res$secu_printemps, 1), "%")), div(class="kpi-desc", "Remplissage mesuré le 1er avril."))),
+        column(4, div(class = "kpi-card red", div(class = "kpi-title", "Défaillance Estivale"), div(class = "kpi-value", paste(round(res$defaillance_moy, 0), "jours/an")), div(class="kpi-desc", "Volume en dessous de 30% (Survie)."))),
+        column(4, div(class = "kpi-card purple", div(class = "kpi-title", "Time-to-Fill (Récupération)"), div(class = "kpi-value", paste(round(res$time_to_fill_moy, 0), "jours")), div(class="kpi-desc", "Temps pour atteindre 80% depuis l'automne.")))
+      ),
+      
+      div(class="section-title", "3. Vulnérabilité Fonctionnelle (Le réseau en cascade)"),
+      fluidRow(
+        column(4, div(class = "kpi-card blue", div(class = "kpi-title", "Rendement du Bassin Versant"), div(class = "kpi-value", paste(round(res$rendement_bv, 1), "%")), div(class="kpi-desc", "Part de la pluie convertie en ruissellement."))),
+        column(4, div(class = "kpi-card dark", div(class = "kpi-title", "Taux de Gaspillage Exutoire"), div(class = "kpi-value", paste(round(res$gaspillage_moyen_annuel, 1), "%")), div(class="kpi-desc", "Volume perdu annuellement vs Capacité totale."))),
+        column(4, div(class = "kpi-card orange", div(class = "kpi-title", "Indice de Rupture de Continuité"), div(class = "kpi-value", paste(round(res$rupture_moy, 0), "jours/an")), div(class="kpi-desc", "Temps sans aucune surverse vers l'aval.")))
+      ),
+      
+      div(class="section-title", "4. Vulnérabilité Agronomique et Métier"),
+      fluidRow(
+        column(6, div(class = "kpi-card orange", div(class = "kpi-title", "Poids de l'Évaporation Pure"), div(class = "kpi-value", paste(round(res$poids_evap, 2), "x Vmax")), div(class="kpi-desc", "Volume total évaporé par an rapporté au Vmax."))),
+        column(6, div(class = "kpi-card green", div(class = "kpi-title", "Probabilité de Succès post-Assec"), div(class = "kpi-value", ifelse(is.na(res$proba_assec), "Aucun Assec", paste(round(res$proba_assec, 1), "%"))), div(class="kpi-desc", "Chances d'atteindre 70% de remplissage l'année N+1.")))
+      )
+    )
+  })
+  
   # --- DONNÉES PALMARÈS & ROBUSTESSE ---
   data_robustesse <- reactive({
     liste_fichiers <- list.files(pattern = "^Analyse_.*\\.csv$")
@@ -477,7 +569,6 @@ server <- function(input, output, session) {
     }
     df_graphique <- bind_rows(df_global_box)
     
-    # Recalcul de la table pour le classement final
     top_12_global <- df_graphique %>% group_by(Evenement) %>% slice_min(order_by = RMSE_INRAE, n = 12, with_ties = FALSE) %>% ungroup()
     palmares_absolu <- top_12_global %>% group_by(hypothese) %>% summarise(Nombre_Apparitions_Top_12 = n())
     departage <- df_graphique %>% group_by(hypothese) %>% summarise(RMSE_Moyen = round(mean(RMSE_INRAE, na.rm = TRUE), 1)) %>% inner_join(palmares_absolu, by = "hypothese") %>% arrange(desc(Nombre_Apparitions_Top_12), RMSE_Moyen)
@@ -485,7 +576,6 @@ server <- function(input, output, session) {
     list(brut = df_graphique, departage = departage, unite = df_graphique$Unite[1])
   })
   
-  # --- GRAPHIQUE EXACT REPRIS DU CODE (Rendu plotOutput) ---
   output$plot_robustesse_box <- renderPlot({
     res <- data_robustesse()
     df_graphique <- res$brut
