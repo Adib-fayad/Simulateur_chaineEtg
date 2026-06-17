@@ -1,5 +1,5 @@
 # ==============================================================================
-# SCRIPT 2 : MOTEUR DE SIMULATION HYDROLOGIQUE (simulateur.R)
+# SCRIPT 2 : MOTEUR DE SIMULATION HYDROLOGIQUE (simulateur.R) - VERSION OPTIMISÉE
 # Objectif : Calculer le bilan hydrologique complet de la chaîne d'étangs
 # Méthode : Modèle Réservoir INRAE (Saturation Progressive, Beta=4, Drainage=0)
 # ==============================================================================
@@ -10,75 +10,13 @@ library(zoo)
 library(igraph)
 
 # ==============================================================================
-# 1. FONCTION DE BILAN JOURNALIER DE L'ÉTANG (Routage hydraulique)
-# ==============================================================================
-Bfinal <- function(Vmax, BF, Vp_etp, Volume_R, Vamont, VFuite, Statut_Assec, Volume_Vidange_Jour, Peche_Jour){
-  
-  Eau_Dispo = BF + Volume_R + Vamont
-  
-  Fuite_Reelle = min(VFuite, max(0, Eau_Dispo))
-  Eau_Dispo = Eau_Dispo - Fuite_Reelle
-  Vsortant = Fuite_Reelle 
-  
-  if (Statut_Assec == "Assec" || Peche_Jour == "oui") {
-    Evap_Reelle = max(0, Vp_etp)
-  } else {
-    if (Vp_etp < 0) {
-      Evap_Reelle = max(Vp_etp, -Eau_Dispo) 
-    } else {
-      Evap_Reelle = Vp_etp 
-    }
-  }
-  Eau_Dispo = Eau_Dispo + Evap_Reelle 
-  
-  if (Peche_Jour == "oui") {
-    Vsortant = Vsortant + Eau_Dispo
-    BF = 0
-    
-  } else if (Volume_Vidange_Jour > 0) {
-    Objectif_Volume = max(0, BF - Volume_Vidange_Jour)
-    if (Eau_Dispo > Objectif_Volume) {
-      Volume_a_vider = Eau_Dispo - Objectif_Volume
-      Volume_theorique = max(Volume_a_vider, Volume_Vidange_Jour)
-    } else {
-      Volume_theorique = Volume_Vidange_Jour
-    }
-    Volume_reel_vide = min(Volume_theorique, max(0, Eau_Dispo))
-    Vsortant = Vsortant + Volume_reel_vide
-    Eau_Dispo = Eau_Dispo - Volume_reel_vide
-    
-    if (Eau_Dispo > Vmax) {
-      Surplus = Eau_Dispo - Vmax
-      Vsortant = Vsortant + Surplus
-      BF = Vmax 
-    } else {
-      BF = Eau_Dispo
-    }
-    
-  } else if (Statut_Assec == "Assec") {
-    Vsortant = Vsortant + Eau_Dispo
-    BF = 0
-    
-  } else {
-    if (Eau_Dispo > Vmax) {
-      Surplus = Eau_Dispo - Vmax
-      Vsortant = Vsortant + Surplus
-      BF = Vmax 
-    } else {
-      BF = Eau_Dispo
-    }
-  } 
-  
-  return(list(BF = BF, Vsortant = Vsortant, Evap_Reelle = Evap_Reelle, Fuite_Reelle = Fuite_Reelle))
-}
-
-# ==============================================================================
-# 2. LE MOTEUR DE SIMULATION (Réseau et Bilan Sol Type INRAE)
+# LE MOTEUR DE SIMULATION (Réseau et Bilan Sol Type INRAE - ULTRA RAPIDE)
 # ==============================================================================
 run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, beta_val = 3, C_transfert = 0.05) {
   
   print(paste("Demarrage de la simulation | Modele INRAE | RU =", RU_defaut, "mm | Beta =", beta_val))
   
+  # --- Préparation des données ---
   table_assec <- tab_etg_data %>%
     select(NOM, starts_with("Assec")) %>%
     pivot_longer(
@@ -109,22 +47,18 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
     mutate(
       annee = as.numeric(format(dat, "%Y")),
       mois_jour = format(dat, "%m-%d"),
-      # Définition de la saison hydrologique (Saison N commence le 15 Octobre de l'année N-1)
       Saison_Hydro = if_else(mois_jour >= "10-15", annee + 1, annee)
     ) %>%
-    # 1. Jointure de l'Assec pour la saison EN COURS
     left_join(
       table_assec %>% select(NOM, annee, Assec_Saison = Assec) %>% mutate(annee = as.numeric(annee)),
       by = c("NOM", "Saison_Hydro" = "annee")
     ) %>%
     mutate(Assec_Saison = replace_na(Assec_Saison, "Evolage")) %>%
-    # 2. Jointure de l'Assec pour la saison PRECEDENTE (Pour le verrou de sécurité)
     left_join(
       table_assec %>% select(NOM, annee, Assec_Saison_Prec = Assec) %>% mutate(annee = as.numeric(annee) + 1),
       by = c("NOM", "Saison_Hydro" = "annee")
     ) %>%
     mutate(Assec_Saison_Prec = replace_na(Assec_Saison_Prec, "Evolage")) %>%
-    
     left_join(vidanges_seules, by = c("NOM" = "NOM", "dat" = "date_exacte")) %>%
     left_join(peches_seules, by = c("NOM" = "NOM", "dat" = "date_exacte")) %>%
     mutate(
@@ -134,14 +68,12 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
       Vidange = replace_na(Vidange_bool, "non"),
       peche   = replace_na(peche_bool, "non"),
       
-      # BOUCLIER AUTOMATIQUE : Si l'étang sort d'un Assec, on bloque sa vidange en fin d'année civile
       Vidange = if_else(mois_jour >= "10-15" & Assec_Saison_Prec == "Assec", "non", Vidange),
       peche   = if_else(mois_jour >= "10-15" & Assec_Saison_Prec == "Assec", "non", peche)
     ) %>% 
     group_by(NOM) %>%
     arrange(dat) %>%
     mutate(
-      # On traque le dernier événement majeur : Le 15 Octobre ouvre les vannes, la Pêche les ferme.
       Evenement_Marquant = case_when(
         peche == "oui" ~ "Peche",
         mois_jour == "10-15" ~ "Reprise_Automne",
@@ -150,16 +82,13 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
     ) %>%
     fill(Evenement_Marquant, .direction = "down") %>%
     mutate(
-      # L'assec est actif UNIQUEMENT SI on est dans une saison d'assec ET que la pêche a eu lieu.
       Statut_Simu = case_when(
         Assec_Saison == "Assec" & Evenement_Marquant == "Peche" ~ "Assec",
         TRUE ~ "Evolage"
       ),
-      
       Surface_Active_Ruissellement = if_else(Statut_Simu == "Assec", Surface_BV, Surface_BV - SURFACE_eau),
       Vp_etp = if_else(Statut_Simu == "Assec", 0, (RR_num - (ETP_num * 1.15)) * SURFACE_eau * 10),
       Vamont = 0,
-      # Initialisation correcte au tout premier jour
       BF = case_when(dat == min(dat) & Statut_Simu == "Evolage" ~ Vmax / 2, TRUE ~ 0),
       RU_courante = 0,
       Volume_R = 0
@@ -174,14 +103,13 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
   ordre_topologique <- names(topo_sort(graph_from_data_frame(liens, directed = TRUE), mode = "out"))
   ordre_topologique <- ordre_topologique[ordre_topologique %in% names(liste_etangs)]
   
+  # --- Boucle Topologique ---
   for (nom_etang in ordre_topologique) {
     etangs_calcule <- liste_etangs[[nom_etang]]
-    Stockage_Vamont <- numeric(nrow(etangs_calcule))
-    etangs_calcule$Vol_Vidange_Jour <- 0
-    etangs_calcule$Vsortant <- 0  
-    etangs_calcule$Evap_Reelle <- 0
-    etangs_calcule$Fuite_Reelle <- 0
+    N_jours <- nrow(etangs_calcule)
     
+    # Remplissage initial des volumes de vidange (Opération vectorisée)
+    etangs_calcule$Vol_Vidange_Jour <- 0
     lignes_vidange <- which(etangs_calcule$Vidange == "oui")
     lignes_peche <- which(etangs_calcule$peche == "oui")
     
@@ -195,14 +123,11 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
         peches_futures <- lignes_peche[lignes_peche > t0]
         
         if (length(peches_futures) > 0) {
-          tfin <- peches_futures[1]
-          delta_T <- tfin - t0
-          jours_effectifs <- min(delta_T, duree_vidange_normale)
+          jours_effectifs <- min(peches_futures[1] - t0, duree_vidange_normale)
         } else {
           jours_effectifs <- duree_vidange_normale
         }
-        
-        jours_effectifs <- min(jours_effectifs, nrow(etangs_calcule) - t0 + 1)
+        jours_effectifs <- min(jours_effectifs, N_jours - t0 + 1)
         
         if (jours_effectifs > 0) {
           etangs_calcule$Vol_Vidange_Jour[t0:(t0 + jours_effectifs - 1)] <- Vol_1ha_jour
@@ -210,55 +135,138 @@ run_hydrological_model <- function(pluvio_data, tab_etg_data, RU_defaut = 150, b
       }
     }
     
-    etangs_calcule$RU_courante[1] <- etangs_calcule$RU_max[1]
+    # ---------------------------------------------------------
+    # OPTIMISATION MAJEURE : EXTRACTION EN VECTEURS NATIFS R
+    # ---------------------------------------------------------
+    RR_vec <- etangs_calcule$RR_num
+    ETP_vec <- etangs_calcule$ETP_num
+    RU_max_vec <- etangs_calcule$RU_max
+    Surf_Act_vec <- etangs_calcule$Surface_Active_Ruissellement
+    Vamont_vec <- etangs_calcule$Vamont
+    VFuite_vec <- etangs_calcule$VFuite
+    Statut_vec <- etangs_calcule$Statut_Simu
+    Peche_vec <- etangs_calcule$peche
+    Vp_etp_vec <- etangs_calcule$Vp_etp
+    Vol_Vid_Jour_vec <- etangs_calcule$Vol_Vidange_Jour
+    Vmax_vec <- etangs_calcule$Vmax
     
-    for (jour in 2:nrow(etangs_calcule)) {
+    # Allocation des vecteurs de sortie (beaucoup plus rapide que modifier un dataframe)
+    RU_courante_vec <- numeric(N_jours)
+    Volume_R_vec <- numeric(N_jours)
+    BF_vec <- numeric(N_jours)
+    Vsortant_vec <- numeric(N_jours)
+    Evap_Reelle_vec <- numeric(N_jours)
+    Fuite_Reelle_vec <- numeric(N_jours)
+    
+    # Initialisation
+    RU_courante_vec[1] <- RU_max_vec[1]
+    BF_vec[1] <- etangs_calcule$BF[1]
+    
+    # BOUCLE EXTREMEMENT RAPIDE (C-level performance dans R)
+    for (jour in 2:N_jours) {
       
-      pluie_jour <- etangs_calcule$RR_num[jour]
-      etp_jour <- etangs_calcule$ETP_num[jour]
-      ru_max <- etangs_calcule$RU_max[jour]
-      ru_prec <- etangs_calcule$RU_courante[jour-1]
+      # 1. Modèle Sol (Ruissellement)
+      ru_max <- RU_max_vec[jour]
+      ru_prec <- RU_courante_vec[jour-1]
+      pluie <- RR_vec[jour]
       
-      taux_remplissage <- ru_prec / ru_max
-      Q_mm <- pluie_jour * (taux_remplissage ^ beta_val)
-      I_mm <- pluie_jour - Q_mm
-      ETa_mm <- min(etp_jour, ru_prec + I_mm)
+      Q_mm <- pluie * ((ru_prec / ru_max) ^ beta_val)
+      I_mm <- pluie - Q_mm
+      ETa_mm <- min(ETP_vec[jour], ru_prec + I_mm)
       
       bilan_sol <- ru_prec + I_mm - ETa_mm
       
       if (bilan_sol > ru_max) {
-        exces_mm <- bilan_sol - ru_max
-        etangs_calcule$RU_courante[jour] <- ru_max
-        ruissellement_total_mm <- Q_mm + exces_mm
+        RU_courante_vec[jour] <- ru_max
+        ruiss_tot <- Q_mm + (bilan_sol - ru_max)
       } else if (bilan_sol < 0) {
-        etangs_calcule$RU_courante[jour] <- 0
-        ruissellement_total_mm <- Q_mm
+        RU_courante_vec[jour] <- 0
+        ruiss_tot <- Q_mm
       } else {
-        etangs_calcule$RU_courante[jour] <- bilan_sol
-        ruissellement_total_mm <- Q_mm
+        RU_courante_vec[jour] <- bilan_sol
+        ruiss_tot <- Q_mm
       }
       
-      etangs_calcule$Volume_R[jour] <- ruissellement_total_mm * etangs_calcule$Surface_Active_Ruissellement[jour] * 10 * C_transfert
+      Vol_R <- ruiss_tot * Surf_Act_vec[jour] * 10 * C_transfert
+      Volume_R_vec[jour] <- Vol_R
       
-      res <- Bfinal(etangs_calcule$Vmax[jour], etangs_calcule$BF[jour-1], etangs_calcule$Vp_etp[jour], 
-                    etangs_calcule$Volume_R[jour], etangs_calcule$Vamont[jour], etangs_calcule$VFuite[jour], 
-                    etangs_calcule$Statut_Simu[jour], etangs_calcule$Vol_Vidange_Jour[jour], etangs_calcule$peche[jour])
+      # 2. Modèle Réservoir (Bfinal intégré)
+      Eau_Dispo <- BF_vec[jour-1] + Vol_R + Vamont_vec[jour]
+      VFuite <- VFuite_vec[jour]
       
-      etangs_calcule$BF[jour] = res$BF
-      Stockage_Vamont[jour] = res$Vsortant
-      etangs_calcule$Vsortant[jour] = res$Vsortant 
-      etangs_calcule$Evap_Reelle[jour] = res$Evap_Reelle
-      etangs_calcule$Fuite_Reelle[jour] = res$Fuite_Reelle
+      Fuite_Reelle <- min(VFuite, max(0, Eau_Dispo))
+      Eau_Dispo <- Eau_Dispo - Fuite_Reelle
+      Vsort <- Fuite_Reelle 
+      
+      vp <- Vp_etp_vec[jour]
+      Statut <- Statut_vec[jour]
+      Peche <- Peche_vec[jour]
+      
+      if (Statut == "Assec" || Peche == "oui") {
+        Evap_Reelle <- max(0, vp)
+      } else {
+        Evap_Reelle <- if(vp < 0) max(vp, -Eau_Dispo) else vp 
+      }
+      
+      Eau_Dispo <- Eau_Dispo + Evap_Reelle 
+      
+      v_mx <- Vmax_vec[jour]
+      v_vid <- Vol_Vid_Jour_vec[jour]
+      
+      if (Peche == "oui") {
+        Vsort <- Vsort + Eau_Dispo
+        bf_fin <- 0
+      } else if (v_vid > 0) {
+        Obj_Vol <- max(0, BF_vec[jour-1] - v_vid)
+        Vol_a_vider <- if(Eau_Dispo > Obj_Vol) Eau_Dispo - Obj_Vol else 0
+        Vol_reel_vide <- min(max(Vol_a_vider, v_vid), max(0, Eau_Dispo))
+        
+        Vsort <- Vsort + Vol_reel_vide
+        Eau_Dispo <- Eau_Dispo - Vol_reel_vide
+        
+        if (Eau_Dispo > v_mx) {
+          Vsort <- Vsort + (Eau_Dispo - v_mx)
+          bf_fin <- v_mx 
+        } else {
+          bf_fin <- Eau_Dispo
+        }
+      } else if (Statut == "Assec") {
+        Vsort <- Vsort + Eau_Dispo
+        bf_fin <- 0
+      } else {
+        if (Eau_Dispo > v_mx) {
+          Vsort <- Vsort + (Eau_Dispo - v_mx)
+          bf_fin <- v_mx 
+        } else {
+          bf_fin <- Eau_Dispo
+        }
+      } 
+      
+      BF_vec[jour] <- bf_fin
+      Vsortant_vec[jour] <- Vsort
+      Evap_Reelle_vec[jour] <- Evap_Reelle
+      Fuite_Reelle_vec[jour] <- Fuite_Reelle
     }
     
-    liste_etangs[[nom_etang]] <- etangs_calcule
-    exutoire <- etangs_calcule$Exutoire_1[1]
+    # ---------------------------------------------------------
+    # REINJECTION DES DONNEES DANS LE TABLEAU
+    # ---------------------------------------------------------
+    etangs_calcule$RU_courante <- RU_courante_vec
+    etangs_calcule$Volume_R <- Volume_R_vec
+    etangs_calcule$BF <- BF_vec
+    etangs_calcule$Vsortant <- Vsortant_vec
+    etangs_calcule$Evap_Reelle <- Evap_Reelle_vec
+    etangs_calcule$Fuite_Reelle <- Fuite_Reelle_vec
     
+    liste_etangs[[nom_etang]] <- etangs_calcule
+    
+    # Propagation en Aval
+    exutoire <- etangs_calcule$Exutoire_1[1]
     if (!is.na(exutoire) && exutoire != "") {
       if (exutoire != "OUTPUT" && exutoire %in% names(liste_etangs)) {
-        liste_etangs[[exutoire]]$Vamont <- liste_etangs[[exutoire]]$Vamont + Stockage_Vamont
+        liste_etangs[[exutoire]]$Vamont <- liste_etangs[[exutoire]]$Vamont + Vsortant_vec
       } else {
-        Volume_Total_Exutoire_BV$Volume_Riviere <- Volume_Total_Exutoire_BV$Volume_Riviere + Stockage_Vamont
+        Volume_Total_Exutoire_BV$Volume_Riviere <- Volume_Total_Exutoire_BV$Volume_Riviere + Vsortant_vec
       }
     }
   }

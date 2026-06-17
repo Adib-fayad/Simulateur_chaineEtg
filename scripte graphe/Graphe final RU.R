@@ -116,6 +116,35 @@ write.table(top_12_global, "Palmares_Top12_Par_Evenement.csv", sep = ";", row.na
 print("Export terminé : Palmares_Top12_Par_Evenement.csv")
 
 
+
+# ==============================================================================
+# COMPTAGE ET DEPARTAGE DES SCENARIOS (PALMARÈS ABSOLU)
+# ==============================================================================
+
+# 1. Création du palmarès (On compte le nombre d'apparitions dans le Top 12)
+palmares_absolu <- top_12_global %>%
+  group_by(hypothese) %>%
+  summarise(Nombre_Apparitions_Top_12 = n()) %>%
+  arrange(desc(Nombre_Apparitions_Top_12))
+
+# 2. Départage par l'erreur moyenne globale
+departage <- df_tous_orages %>%
+  group_by(hypothese) %>%
+  summarise(RMSE_Moyen_Global = round(mean(RMSE, na.rm = TRUE), 1)) %>%
+  inner_join(palmares_absolu, by = "hypothese") %>%
+  # On trie d'abord par le plus grand nombre d'apparitions, puis par le RMSE le plus bas
+  arrange(desc(Nombre_Apparitions_Top_12), RMSE_Moyen_Global)
+
+# 3. Affichage du grand gagnant et sauvegarde
+print("🏆 CLASSEMENT FINAL DES SCÉNARIOS LES PLUS ROBUSTES :")
+print(head(departage, 10)) # Affiche le Top 10 dans la console
+
+write.table(departage, "Classement_Final_Robustesse.csv", sep = ";", row.names = FALSE, dec = ",")
+print("Export terminé : Classement_Final_Robustesse.csv")
+
+
+
+
 # =========================================================
 # DEPARTAGE DES SCENARIOS PAR L'ERREUR MOYENNE
 # =========================================================
@@ -145,10 +174,10 @@ dev.new(width = 12, height = 6)
 # ------------------------------------------------------------------------------
 # 1. PARAMÉTRAGE 
 # ------------------------------------------------------------------------------
-nom_etang <- "GRAND ETANG LA ROUE" 
-annee_debut <- 2023 
+nom_etang <- "CORVEYZIEUX" 
+annee_debut <- 2024 
 
-chemin_fichier_opti <- "Banque_Simulations_Globales/Simu_INRAE_Beta1_RU175_Coef0.30.rds"
+chemin_fichier_opti <- "Banque_Simulations_Globales/Simu_INRAE_Beta4_RU200_Coef0.20.rds"
 
 # ------------------------------------------------------------------------------
 # 2. CHARGEMENT ET DÉTECTION DE LA PÉRIODE DE GESTION
@@ -270,3 +299,4 @@ graphique_final <- g_entrees + g_sorties +
   )
 
 print(graphique_final)
+
