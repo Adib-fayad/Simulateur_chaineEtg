@@ -411,3 +411,186 @@ g_boxplot <- ggplot(df_final_remplissage, aes(x = Scenario, y = Taux_Remplissage
   )
 
 print(g_boxplot)
+
+
+
+
+
+
+# ==============================================================================
+# ANALYSE DE VULNÉRABILITÉ : RESTE À VIVRE ESTIVAL (REMPLISSAGE AU 1ER SEPT)
+# ==============================================================================
+
+library(tidyverse)
+library(lubridate)
+library(stringr)
+
+# ------------------------------------------------------------------------------
+# 1. PARAMÉTRAGE DES REPERTOIRES
+# ------------------------------------------------------------------------------
+dossiers_scenarios <- c(
+  "simulation futur/Chalamont_aleatoire/Grand_petit",
+  "simulation futur/Chalamont_aleatoire/pluriannuel_fixe",
+  "simulation futur/Chalamont_aleatoire/pluriannuel_variable",
+  "simulation futur/Chalamont_opti/Vidange",
+  "simulation futur/Chalamont_opti/Vidange_Assec"
+)
+
+noms_propres_scenarios <- c(
+  "Grand_petit" = "1. Aléatoire (Taille)",
+  "pluriannuel_fixe" = "2. Aléatoire (Fixe)",
+  "pluriannuel_variable" = "3. Aléatoire (Variable)",
+  "Vidange" = "4. Opti (Vidange seule)",
+  "Vidange_Assec" = "5. Opti (Synchronisation Totale)"
+)
+
+# ------------------------------------------------------------------------------
+# 2. AUTO-CLASSIFICATION TOPOLOGIQUE DES ÉTANGS
+# ------------------------------------------------------------------------------
+premier_dossier <- dossiers_scenarios[dir.exists(dossiers_scenarios)][1]
+premier_fichier <- list.files(premier_dossier, pattern = "\\.rds$", full.names = TRUE)[1]
+simu_topo <- readRDS(premier_fichier)
+
+tous_les_etangs <- names(simu_topo$liste_finale)
+
+destination_aval <- sapply(simu_topo$liste_finale, function(x) x$Exutoire_1[1])
+
+etangs_tete <- tous_les_etangs[!(tous_les_etangs %in% destination_aval)]
+etangs_exutoire <- tous_les_etangs[!(destination_aval %in% tous_les_etangs)]
+etangs_milieu <- setdiff(tous_les_etangs, c(etangs_tete, etangs_exutoire))
+
+cat("--- RÉSEAU HYDRAULIQUE DÉTECTÉ AUTOMATIQUEMENT ---\n")
+cat("Étangs de Tête :", paste(etangs_tete, collapse = ", "), "\n")
+cat("Étangs de Milieu :", paste(etangs_milieu, collapse = ", "), "\n")
+cat("Étangs Exutoires :", paste(etangs_exutoire, collapse = ", "), "\n--------------------------------------------------\n")
+
+get_categorie <- function(nom) {
+  if (nom %in% etangs_tete) return("1. Étang de Tête")
+  if (nom %in% etangs_milieu) return("2. Étang de Milieu")
+  if (nom %in% etangs_exutoire) return("3. Étang Exutoire")
+  return("Autre")
+}
+
+# ------------------------------------------------------------------------------
+# 3. FONCTION DE CALCUL DU REMPLISSAGE AU 1ER SEPTEMBRE
+# ------------------------------------------------------------------------------
+calculer_remplissage_1sept <- function(chemin_rds, nom_scenario, nom_modele) {
+  simu <- readRDS(chemin_rds)
+  if(is.null(simu$liste_finale)) return(NULL)
+  
+  liste_stats <- lapply(names(simu$liste_finale), function(nom_etang) {
+    df <- simu$liste_finale[[nom_etang]]
+    vmax <- df$Vmax[1]
+    
+    df %>%
+      mutate(mois = month(dat), jour = day(dat), annee = year(dat)) %>%
+      filter(mois == 9, jour == 1) %>%
+      mutate(
+        Taux_Remplissage = (BF / vmax) * 100,
+        Categorie = get_categorie(nom_etang),
+        Scenario = nom_scenario,
+        Modele_Meteo = nom_modele
+      ) %>%
+      select(annee, Taux_Remplissage, Categorie, Scenario, Modele_Meteo)
+  })
+  return(bind_rows(liste_stats))
+}
+
+# ------------------------------------------------------------------------------
+# 4. CRAWLER (PARCOURS DES DOSSIERS)
+# ------------------------------------------------------------------------------
+cat("Extraction des chroniques de survie estivale...\n")
+liste_dfs <- list()
+
+for (dossier in dossiers_scenarios) {
+  if (!dir.exists(dossier)) next
+  
+  fichiers <- list.files(dossier, pattern = "\\.rds$", full.names = TRUE)
+  if(length(fichiers) == 0) next
+  
+  nom_scenario <- noms_propres_scenarios[basename(dossier)]
+  
+  for (f in fichiers) {
+    nom_modele <- str_extract(basename(f), "(?<=Meteo_).*(?=_[0-9]{8}\\.rds)")
+    if (is.na(nom_modele)) nom_modele <- "Inconnu"
+    
+    res <- calculer_remplissage_1sept(f, nom_scenario, nom_modele)
+    if (!is.null(res)) liste_dfs[[length(liste_dfs) + 1]] <- res
+  }
+}
+
+df_final_remplissage <- bind_rows(liste_dfs) %>%
+  filter(!is.na(Taux_Remplissage))
+
+df_final_remplissage <- df_final_remplissage %>%
+  mutate(Modele_Meteo_Desc = case_when(
+    str_detect(Modele_Meteo, "ALADIN63") ~ "CNRM-CM5 (Modéré)",
+    str_detect(Modele_Meteo, "REMO2009") ~ "MPI-ESM (Intermédiaire)",
+    str_detect(Modele_Meteo, "WRF381P")  ~ "IPSL-CM5A (Humide)",
+    str_detect(Modele_Meteo, "RCA4")     ~ "IPSL-CM5A (Hiver humide/Été extrême)",
+    str_detect(Modele_Meteo, "RegCM4-6") ~ "HadGEM2 (Chaud/Sec modéré)",
+    str_detect(Modele_Meteo, "CCLM4-8-17") ~ "HadGEM2 (Extrême sec)",
+    TRUE ~ Modele_Meteo
+  )) %>%
+  mutate(Modele_Meteo_Desc = factor(Modele_Meteo_Desc, levels = c(
+    "CNRM-CM5 (Modéré)", "MPI-ESM (Intermédiaire)", "IPSL-CM5A (Humide)",
+    "IPSL-CM5A (Hiver humide/Été extrême)", "HadGEM2 (Chaud/Sec modéré)", "HadGEM2 (Extrême sec)"
+  )))
+
+# ------------------------------------------------------------------------------
+# 5. GÉNÉRATION DU GRAPHIQUE
+# ------------------------------------------------------------------------------
+graphics.off() 
+dev.new(width = 15, height = 8)
+
+g_boxplot <- ggplot(df_final_remplissage, aes(x = Scenario, y = Taux_Remplissage, fill = Modele_Meteo_Desc)) +
+  geom_boxplot(alpha = 0.8, outlier.size = 0.3, width = 0.7, position = position_dodge(0.8)) +
+  facet_wrap(~ Categorie, ncol = 3) +
+  scale_fill_brewer(palette = "RdYlBu", direction = -1) + 
+  theme_minimal(base_size = 13) +
+  labs(
+    title = "Reste à Vivre Estival : Niveau des Étangs au 1er Septembre (2026-2070)",
+    subtitle = "Capacité de résilience à l'étiage par position topologique et sensibilité climatique",
+    x = "Stratégie de Gestion Testée",
+    y = "Taux de Remplissage Restant (%)",
+    fill = "Modèle de Changement Climatique"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+    strip.background = element_rect(fill = "#2c3e50", color = NA),
+    strip.text = element_text(color = "white", face = "bold", size = 12),
+    panel.grid.major.x = element_blank(),
+    legend.position = "bottom",
+    legend.box = "horizontal"
+  )
+
+print(g_boxplot)
+
+
+
+
+
+
+
+
+
+# ==============================================================================
+# OPTION ACCESSIBILITÉ : TABLEAU DE SYNTHÈSE DES GAINS PAR HORIZON TEMPOREL
+# ==============================================================================
+
+df_synthese_horizons <- df_master %>%
+  mutate(Horizon = case_when(
+    Saison_Hydro <= 2040 ~ "2030-2040 (Proche)",
+    Saison_Hydro > 2040 & Saison_Hydro <= 2055 ~ "2041-2055 (Moyen)",
+    Saison_Hydro > 2055 ~ "2056-2070 (Lointain)"
+  )) %>%
+  group_by(Horizon, Modele_Meteo_Desc, Scenario) %>%
+  summarise(
+    Moyenne_Ecoulement = mean(Coef_Ecoulement, na.rm = TRUE),
+    Moyenne_Evaporation = mean(Coef_Evaporation, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(Horizon, Modele_Meteo_Desc, Scenario)
+
+# Affichage des premières lignes de performance dans la console
+print(head(df_synthese_horizons, 15))
