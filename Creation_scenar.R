@@ -155,8 +155,8 @@ library(tidyverse)
 library(lubridate)
 
 # PARAMETRES A MODIFIER
-fichier_dates <- "Vidange_Peche_Opti_BV.csv"
-fichier_assecs <- "ASSEC_Opti_BV.csv"
+fichier_dates <- "data/Chalamont_opti/Vidange/Vidange_Peche.csv"
+fichier_assecs <- "data/Chalamont_opti/Vidange/ASSEC_Final.csv"
 fichier_sortie <- "Calendrier_Final_BV.csv"
 
 # 1. Chargement et standardisation
