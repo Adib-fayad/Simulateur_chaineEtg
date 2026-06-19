@@ -329,7 +329,7 @@ calculer_remplissage_15fev <- function(chemin_rds, nom_scenario, nom_modele) {
     
     df %>%
       mutate(mois = month(dat), jour = day(dat), annee = year(dat)) %>%
-      filter(mois == 2, jour == 20) %>%
+      filter(mois == 3, jour == 20) %>%
       mutate(
         Taux_Remplissage = (BF / vmax) * 100,
         Categorie = get_categorie(nom_etang),
@@ -395,7 +395,7 @@ g_boxplot <- ggplot(df_final_remplissage, aes(x = Scenario, y = Taux_Remplissage
   scale_fill_brewer(palette = "RdYlBu", direction = -1) + # Dégradé logique du bleu (frais) au rouge (sec)
   theme_minimal(base_size = 13) +
   labs(
-    title = "Niveau de Remplissage des Étangs au 15 Février (Période 2026-2070)",
+    title = "Niveau de Remplissage des Étangs au 20 mars (Période 2026-2070)",
     subtitle = "Analyse systémique par position topologique et sensibilité aux modèles climatiques DRIAS",
     x = "Stratégie de Gestion Testée",
     y = "Taux de Remplissage Stocké (%)",
