@@ -329,7 +329,7 @@ calculer_remplissage_15fev <- function(chemin_rds, nom_scenario, nom_modele) {
     
     df %>%
       mutate(mois = month(dat), jour = day(dat), annee = year(dat)) %>%
-      filter(mois == 2, jour == 20) %>%
+      filter(mois == 3, jour == 20) %>%
       mutate(
         Taux_Remplissage = (BF / vmax) * 100,
         Categorie = get_categorie(nom_etang),
@@ -402,7 +402,7 @@ g_boxplot <- ggplot(df_final_remplissage, aes(x = Scenario, y = Taux_Remplissage
   coord_cartesian(ylim = c(0, 100)) + # Verrouille proprement l'axe de 0 à 100%
   theme_minimal(base_size = 13) +
   labs(
-    title = "Niveau de Remplissage des Étangs au 15 Février (Période 2026-2070)",
+    title = "Niveau de Remplissage des Étangs au 20 mars (Période 2026-2070)",
     subtitle = "Analyse systémique par position topologique et sensibilité aux modèles climatiques DRIAS",
     x = "Stratégie de Gestion Testée",
     y = "Taux de Remplissage Stocké (%)",
@@ -579,23 +579,172 @@ print(g_boxplot)
 
 
 # ==============================================================================
-# OPTION ACCESSIBILITÉ : TABLEAU DE SYNTHÈSE DES GAINS PAR HORIZON TEMPOREL
+# COMPILATION GÉNÉRALE ET SYNTHÈSE DES INDICATEURS HYDROLOGIQUES (2026-2070)
 # ==============================================================================
 
-df_synthese_horizons <- df_master %>%
+library(tidyverse)
+library(lubridate)
+library(stringr)
+
+# ------------------------------------------------------------------------------
+# 1. PARAMÉTRAGE DES REPERTOIRES
+# ------------------------------------------------------------------------------
+dossiers_scenarios <- c(
+  "simulation futur/Chalamont_aleatoire/Grand_petit",
+  "simulation futur/Chalamont_aleatoire/pluriannuel_fixe",
+  "simulation futur/Chalamont_aleatoire/pluriannuel_variable",
+  "simulation futur/Chalamont_opti/Vidange",
+  "simulation futur/Chalamont_opti/Vidange_Assec"
+)
+
+noms_propres_scenarios <- c(
+  "Grand_petit" = "1. Aléatoire (Taille)",
+  "pluriannuel_fixe" = "2. Aléatoire (Fixe)",
+  "pluriannuel_variable" = "3. Aléatoire (Variable)",
+  "Vidange" = "4. Opti (Vidange seule)",
+  "Vidange_Assec" = "5. Opti (Synchronisation Totale)"
+)
+
+# ------------------------------------------------------------------------------
+# 2. MOTEUR DE CALCUL UNIQUE ET SÉCURISÉ (TOUS INDICATEURS)
+# ------------------------------------------------------------------------------
+calculer_tous_indicateurs <- function(chemin_rds, nom_scenario, nom_modele) {
+  simu <- readRDS(chemin_rds)
+  if(length(simu$liste_finale) == 0) return(NULL)
+  
+  # A. Classification topologique automatique
+  tous_les_etangs <- names(simu$liste_finale)
+  destination_aval <- sapply(simu$liste_finale, function(x) x$Exutoire_1[1])
+  
+  etangs_tete <- tous_les_etangs[!(tous_les_etangs %in% destination_aval)]
+  etangs_exutoire <- tous_les_etangs[!(destination_aval %in% tous_les_etangs)]
+  etangs_milieu <- setdiff(tous_les_etangs, c(etangs_tete, etangs_exutoire))
+  
+  get_categorie <- function(nom) {
+    if (nom %in% etangs_tete) return("1. Étang de Tête")
+    if (nom %in% etangs_milieu) return("2. Étang de Milieu")
+    if (nom %in% etangs_exutoire) return("3. Étang Exutoire")
+    return("Autre")
+  }
+  
+  # B. Données de structure
+  surface_totale_bv <- sum(sapply(simu$liste_finale, function(x) x$Surface_BV[1]), na.rm = TRUE)
+  surface_eau_totale <- sum(sapply(simu$liste_finale, function(x) x$SURFACE_eau[1]), na.rm = TRUE)
+  
+  # Fusion de l'historique journalier de tous les étangs
+  df_all_etangs <- bind_rows(simu$liste_finale, .id = "NOM_ETANG") %>%
+    mutate(
+      annee = year(dat), mois = month(dat), jour = day(dat),
+      Saison_Hydro = if_else(mois > 10 | (mois == 10 & jour >= 15), annee + 1, annee)
+    )
+  
+  # C. Partie Globale (Bilan de masse à l'échelle du bassin versant)
+  df_daily_global <- df_all_etangs %>%
+    group_by(Saison_Hydro, dat) %>%
+    summarise(
+      RR_jour = first(RR),
+      Volume_Ruiss_Tous = sum(Volume_R, na.rm = TRUE),
+      Volume_Evap_Tous = sum(abs(Evap_Reelle[Evap_Reelle < 0]), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    left_join(simu$exutoire_data %>% select(dat, Volume_Riviere), by = "dat")
+  
+  bilan_global <- df_daily_global %>%
+    group_by(Saison_Hydro) %>%
+    summarise(
+      Pluie_Totale_mm = sum(RR_jour, na.rm = TRUE),
+      Vol_Pluie_BV_m3 = Pluie_Totale_mm * surface_totale_bv * 10,
+      Coef_Écoulement = sum(Volume_Riviere, na.rm = TRUE) / Vol_Pluie_BV_m3,
+      Coef_Évaporation = sum(Volume_Evap_Tous, na.rm = TRUE) / Vol_Pluie_BV_m3,
+      Coef_Captage = (sum(Volume_Ruiss_Tous, na.rm = TRUE) + (Pluie_Totale_mm * surface_eau_totale * 10)) / Vol_Pluie_BV_m3,
+      .groups = "drop"
+    )
+  
+  # D. Partie Typologique (Suivi fin d'hiver et fin d'été par catégorie)
+  df_points_remplissage <- df_all_etangs %>%
+    filter((mois == 3 & jour == 20) | (mois == 9 & jour == 1)) %>%
+    mutate(
+      Taux_Remplissage = (BF / Vmax) * 100,
+      Categorie = sapply(NOM_ETANG, get_categorie)
+    ) %>%
+    group_by(Saison_Hydro, Categorie) %>%
+    summarise(
+      Remplissage_20Mars = mean(Taux_Remplissage[mois == 3], na.rm = TRUE),
+      Remplissage_1Sept = mean(Taux_Remplissage[mois == 9], na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  # E. Fusion finale pour la chronique annuelle
+  chronique_annuelle <- df_points_remplissage %>%
+    left_join(bilan_global, by = "Saison_Hydro") %>%
+    filter(Saison_Hydro >= 2026 & Saison_Hydro <= 2070) %>%
+    mutate(Scenario = nom_scenario, Modele_Meteo = nom_modele)
+  
+  return(chronique_annuelle)
+}
+
+# ------------------------------------------------------------------------------
+# 3. LE CRAWLER MULTI-INDICATEURS
+# ------------------------------------------------------------------------------
+cat("Extraction simultanée de tous les indicateurs...\n")
+liste_complete <- list()
+
+for (dossier in dossiers_scenarios) {
+  if (!dir.exists(dossier)) next
+  fichiers <- list.files(dossier, pattern = "\\.rds$", full.names = TRUE)
+  nom_scenario <- noms_propres_scenarios[basename(dossier)]
+  
+  for (f in fichiers) {
+    nom_modele <- str_extract(basename(f), "(?<=Meteo_).*(?=_[0-9]{8}\\.rds)")
+    if (is.na(nom_modele)) nom_modele <- "Inconnu"
+    
+    res <- calculer_tous_indicateurs(f, nom_scenario, nom_modele)
+    if (!is.null(res)) liste_complete[[length(liste_complete) + 1]] <- res
+  }
+}
+
+df_master_total <- bind_rows(liste_complete)
+
+# Uniformisation et mise en forme des modèles climatiques
+df_master_total <- df_master_total %>%
+  mutate(Modele_Meteo_Desc = case_when(
+    str_detect(Modele_Meteo, "ALADIN63") ~ "CNRM-CM5 (Modéré)",
+    str_detect(Modele_Meteo, "REMO2009") ~ "MPI-ESM (Intermédiaire)",
+    str_detect(Modele_Meteo, "WRF381P")  ~ "IPSL-CM5A (Humide)",
+    str_detect(Modele_Meteo, "RCA4")     ~ "IPSL-CM5A (Hiver humide/Été extrême)",
+    str_detect(Modele_Meteo, "RegCM4-6") ~ "HadGEM2 (Chaud/Sec modéré)",
+    str_detect(Modele_Meteo, "CCLM4-8-17") ~ "HadGEM2 (Extrême sec)",
+    TRUE ~ Modele_Meteo
+  ))
+
+# Sauvegarde de la grande table brute (année par année, de 2026 à 2070)
+write_excel_csv(df_master_total, file = "indicateurs_annuels_complets.csv")
+cat("Fichier brut sauvegardé : 'indicateurs_annuels_complets.csv'\n")
+
+# ------------------------------------------------------------------------------
+# 4. COMPILATION DE LA MEGA-SYNTHÈSE PAR HORIZON TEMPOREL
+# ------------------------------------------------------------------------------
+cat("Génération de la synthèse décisionnelle par Horizon...\n")
+
+df_synthese_horizons <- df_master_total %>%
   mutate(Horizon = case_when(
     Saison_Hydro <= 2040 ~ "2030-2040 (Proche)",
     Saison_Hydro > 2040 & Saison_Hydro <= 2055 ~ "2041-2055 (Moyen)",
     Saison_Hydro > 2055 ~ "2056-2070 (Lointain)"
   )) %>%
-  group_by(Horizon, Modele_Meteo_Desc, Scenario) %>%
+  group_by(Horizon, Modele_Meteo_Desc, Scenario, Categorie) %>%
   summarise(
-    Moyenne_Ecoulement = mean(Coef_Ecoulement, na.rm = TRUE),
-    Moyenne_Evaporation = mean(Coef_Evaporation, na.rm = TRUE),
+    Pluie_Moyenne_mm = mean(Pluie_Totale_mm, na.rm = TRUE),
+    Ecoulement_Global_Moy = mean(Coef_Écoulement, na.rm = TRUE),
+    Evaporation_Global_Moy = mean(Coef_Évaporation, na.rm = TRUE),
+    Captage_Global_Moy = mean(Coef_Captage, na.rm = TRUE),
+    Remplissage_20Mars_Moy = mean(Remplissage_20Mars, na.rm = TRUE),
+    Remplissage_1Sept_Moy = mean(Remplissage_1Sept, na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  arrange(Horizon, Modele_Meteo_Desc, Scenario)
+  arrange(Horizon, Modele_Meteo_Desc, Scenario, Categorie)
 
+<<<<<<< HEAD
 # Affichage des premières lignes de performance dans la console
 print(head(df_synthese_horizons, 15))
 
@@ -773,3 +922,10 @@ g_chronique_1sept <- ggplot(df_lignes_1sept, aes(x = Saison_Hydro, y = Taux_Moye
 
 print(g_chronique_1sept)
 
+=======
+# Sauvegarde de la table de synthèse condensée
+write_excel_csv(df_synthese_horizons, file = "synthese_indicateurs_horizons.csv")
+cat("Fichier de synthèse sauvegardé : 'synthese_indicateurs_horizons.csv'\n")
+# Affichage de contrôle dans la console
+print(head(df_synthese_horizons, 20))
+>>>>>>> caf39a16dfc5f912872b7c14953e6b9d15bb7ac6
