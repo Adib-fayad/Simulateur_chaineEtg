@@ -162,7 +162,11 @@ couleurs_meteo <- c(
 # -- TYPE A1 : Coef d'Ecoulement --
 dev.new(width = 14, height = 8)
 gA1 <- ggplot(df_master, aes(x = Saison_Hydro, y = Coef_Ecoulement, color = Scenario, linetype = Scenario)) +
+<<<<<<< HEAD
+  geom_point(alpha = 0.7, size = 1.5)  + # LIGNE MODIFIÉE ICI
+=======
   geom_line(linewidth = 0.8, alpha = 0.9) + # LIGNE MODIFIÉE ICI
+>>>>>>> a4a6148854ba9ccfa7d4d0a13a18cce1b78ba7a5
   facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
   scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
@@ -760,9 +764,16 @@ graphics.off()
 dev.new(width = 15, height = 8)
 
 g_boxplot <- ggplot(df_final_remplissage, aes(x = Scenario, y = Taux_Remplissage, fill = Modele_Meteo_Desc)) +
-  geom_boxplot(alpha = 0.8, outlier.size = 0.3, width = 0.7, position = position_dodge(0.8)) +
+  geom_boxplot(
+    alpha = 0.9, 
+    outlier.shape = NA, # Supprime les points noirs parasites
+    linewidth = 0.3,    # Affine les bordures pour laisser voir la couleur
+    width = 0.7, 
+    position = position_dodge(0.8)
+  ) +
   facet_wrap(~ Categorie, ncol = 3) +
-  scale_fill_brewer(palette = "RdYlBu", direction = -1) + # Dégradé logique du bleu (frais) au rouge (sec)
+  scale_fill_brewer(palette = "RdYlBu", direction = -1) + 
+  coord_cartesian(ylim = c(0, 100)) + # Verrouille proprement l'axe de 0 à 100%
   theme_minimal(base_size = 13) +
   labs(
     title = "Niveau de Remplissage des Étangs au 20 mars (Période 2026-2070)",
@@ -781,9 +792,6 @@ g_boxplot <- ggplot(df_final_remplissage, aes(x = Scenario, y = Taux_Remplissage
   )
 
 print(g_boxplot)
-
-
-
 
 
 
@@ -1110,8 +1118,188 @@ df_synthese_horizons <- df_master_total %>%
   ) %>%
   arrange(Horizon, Modele_Meteo_Desc, Scenario, Categorie)
 
+<<<<<<< HEAD
+# Affichage des premières lignes de performance dans la console
+print(head(df_synthese_horizons, 15))
+
+
+
+
+
+
+
+
+
+
+
+# ==============================================================================
+# CONTEXTE CLIMATIQUE 2026-2070 : ÉVOLUTION DU BILAN HYDRIQUE (P - ETP)
+# ==============================================================================
+
+library(tidyverse)
+library(lubridate)
+library(stringr)
+
+# 1. PARAMÉTRAGE (On n'a besoin que d'un seul dossier pour lire la météo)
+dossier_meteo <- "simulation futur/Chalamont_aleatoire/Grand_petit"
+fichiers_meteo <- list.files(dossier_meteo, pattern = "\\.rds$", full.names = TRUE)
+
+cat("Extraction des données météorologiques DRIAS...\n")
+liste_meteo <- list()
+
+# 2. EXTRACTION DE LA MÉTÉO
+for (f in fichiers_meteo) {
+  simu <- readRDS(f)
+  nom_modele <- str_extract(basename(f), "(?<=Meteo_).*(?=_[0-9]{8}\\.rds)")
+  if (is.na(nom_modele)) nom_modele <- "Inconnu"
+  
+  # La météo étant globale, on extrait les données du premier étang de la liste
+  df_meteo_brut <- simu$liste_finale[[1]] 
+  
+  bilan_annuel <- df_meteo_brut %>%
+    mutate(
+      annee = year(dat), mois = month(dat), jour = day(dat),
+      Saison_Hydro = if_else(mois > 10 | (mois == 10 & jour >= 15), annee + 1, annee)
+    ) %>%
+    group_by(Saison_Hydro) %>%
+    summarise(
+      Pluie_mm = sum(RR, na.rm = TRUE),
+      ETP_mm = sum(ETP_grille, na.rm = TRUE), # Vérifie que ta colonne s'appelle bien ETP
+      Bilan_Climatique = Pluie_mm - ETP_mm,
+      .groups = "drop"
+    ) %>%
+    filter(Saison_Hydro >= 2026 & Saison_Hydro <= 2070) %>%
+    mutate(Modele_Meteo = nom_modele)
+  
+  liste_meteo[[length(liste_meteo) + 1]] <- bilan_annuel
+}
+
+df_meteo_master <- bind_rows(liste_meteo)
+
+# 3. MISE AU PROPRE DES LÉGENDES
+df_meteo_master <- df_meteo_master %>%
+  mutate(Modele_Meteo_Desc = case_when(
+    str_detect(Modele_Meteo, "ALADIN63") ~ "CNRM-CM5 (Modéré)",
+    str_detect(Modele_Meteo, "REMO2009") ~ "MPI-ESM (Intermédiaire)",
+    str_detect(Modele_Meteo, "WRF381P")  ~ "IPSL-CM5A (Humide)",
+    str_detect(Modele_Meteo, "RCA4")     ~ "IPSL-CM5A (Hiver humide/Été extrême)",
+    str_detect(Modele_Meteo, "RegCM4-6") ~ "HadGEM2 (Chaud/Sec modéré)",
+    str_detect(Modele_Meteo, "CCLM4-8-17") ~ "HadGEM2 (Extrême sec)",
+    TRUE ~ Modele_Meteo
+  )) %>%
+  mutate(Modele_Meteo_Desc = factor(Modele_Meteo_Desc, levels = c(
+    "CNRM-CM5 (Modéré)", "MPI-ESM (Intermédiaire)", "IPSL-CM5A (Humide)",
+    "IPSL-CM5A (Hiver humide/Été extrême)", "HadGEM2 (Chaud/Sec modéré)", "HadGEM2 (Extrême sec)"
+  )))
+
+# 4. GÉNÉRATION DU GRAPHIQUE DU BILAN CLIMATIQUE
+dev.new(width = 14, height = 8)
+
+g_meteo <- ggplot(df_meteo_master, aes(x = Saison_Hydro, y = Bilan_Climatique, color = Modele_Meteo_Desc)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 1) + # La ligne d'équilibre
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, linewidth = 1.5) +
+  geom_point(alpha = 0.3, size = 1.5) + # Affiche la dispersion annuelle en fond
+  scale_color_brewer(palette = "RdYlBu", direction = -1) +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Évolution du Bilan Hydrique Climatique Annuel (Pluie - ETP)",
+    subtitle = "Forçage météorologique brut de la Dombes (2026-2070). Une valeur sous 0 indique un déficit atmosphérique annuel.",
+    x = "Saison Hydrologique",
+    y = "Bilan P - ETP (mm)",
+    color = "Modèle Climatique DRIAS"
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold")
+  )
+
+print(g_meteo)
+
+
+
+
+
+
+
+# ------------------------------------------------------------------------------
+# PRÉPARATION DES DONNÉES : MOYENNE GLOBALE AU 15 FÉVRIER
+# ------------------------------------------------------------------------------
+# On fait la moyenne de tous les étangs pour avoir la tendance globale du réseau
+df_lignes_15fev <- df_final_remplissage %>%
+  group_by(annee, Scenario, Modele_Meteo_Desc) %>%
+  summarise(Taux_Moyen = mean(Taux_Remplissage, na.rm = TRUE), .groups = "drop") %>%
+  rename(Saison_Hydro = annee) # Pour s'aligner avec l'axe X de tes autres graphiques
+
+
+# ------------------------------------------------------------------------------
+# GÉNÉRATION DU GRAPHIQUE CHRONOLOGIQUE
+# ------------------------------------------------------------------------------
+dev.new(width = 14, height = 8)
+
+g_chronique_15fev <- ggplot(df_lignes_15fev, aes(x = Saison_Hydro, y = Taux_Moyen / 100, color = Scenario, linetype = Scenario)) +
+  geom_line(linewidth = 0.8, alpha = 0.9) +
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_color_manual(values = couleurs_scenarios) + 
+  scale_linetype_manual(values = linetypes_scenarios) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Évolution du Taux de Remplissage Moyen du Réseau (15 Février)",
+    subtitle = "Vue Météo : Chronique du stock hivernal global (Données brutes, 2026-2070)",
+    x = "Saison", 
+    y = "Remplissage Moyen au 15/02 (%)", 
+    color = "Gestion", 
+    linetype = "Gestion"
+  ) +
+  theme(
+    legend.position = "bottom", 
+    strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), 
+    strip.text = element_text(face = "bold")
+  )
+
+print(g_chronique_15fev)
+
+# ------------------------------------------------------------------------------
+# PRÉPARATION DES DONNÉES : MOYENNE GLOBALE AU 1ER SEPTEMBRE
+# ------------------------------------------------------------------------------
+# On fait la moyenne de tous les étangs pour avoir la tendance globale du réseau
+df_lignes_1sept <- df_final_remplissage %>%
+  group_by(annee, Scenario, Modele_Meteo_Desc) %>%
+  summarise(Taux_Moyen = mean(Taux_Remplissage, na.rm = TRUE), .groups = "drop") %>%
+  rename(Saison_Hydro = annee) # Pour s'aligner avec l'axe X
+
+# ------------------------------------------------------------------------------
+# GÉNÉRATION DU GRAPHIQUE CHRONOLOGIQUE (1ER SEPTEMBRE)
+# ------------------------------------------------------------------------------
+dev.new(width = 14, height = 8)
+
+g_chronique_1sept <- ggplot(df_lignes_1sept, aes(x = Saison_Hydro, y = Taux_Moyen / 100, color = Scenario, linetype = Scenario)) +
+  geom_line(linewidth = 0.8, alpha = 0.9) +
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_color_manual(values = couleurs_scenarios) + 
+  scale_linetype_manual(values = linetypes_scenarios) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Évolution du Taux de Remplissage Moyen du Réseau (1er Septembre)",
+    subtitle = "Vue Météo : Chronique du reste à vivre estival global (Données brutes, 2026-2070)",
+    x = "Saison", 
+    y = "Remplissage Moyen au 01/09 (%)", 
+    color = "Gestion", 
+    linetype = "Gestion"
+  ) +
+  theme(
+    legend.position = "bottom", 
+    strip.background = element_rect(fill = "#fdf2e9", color = "#e67e22"), # Couleurs plus "chaudes/estivales" pour les bandeaux
+    strip.text = element_text(color = "#2c3e50", face = "bold")
+  )
+
+print(g_chronique_1sept)
+
+=======
 # Sauvegarde de la table de synthèse condensée
 write_excel_csv(df_synthese_horizons, file = "synthese_indicateurs_horizons.csv")
 cat("Fichier de synthèse sauvegardé : 'synthese_indicateurs_horizons.csv'\n")
 # Affichage de contrôle dans la console
 print(head(df_synthese_horizons, 20))
+>>>>>>> caf39a16dfc5f912872b7c14953e6b9d15bb7ac6
