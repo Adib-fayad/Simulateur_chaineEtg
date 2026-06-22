@@ -162,13 +162,13 @@ couleurs_meteo <- c(
 # -- TYPE A1 : Coef d'Ecoulement --
 dev.new(width = 14, height = 8)
 gA1 <- ggplot(df_master, aes(x = Saison_Hydro, y = Coef_Ecoulement, color = Scenario, linetype = Scenario)) +
-  geom_smooth(se = FALSE, span = 0.3, linewidth = 1.2) + 
+  geom_line(linewidth = 0.8, alpha = 0.9) + # LIGNE MODIFIÉE ICI
   facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
   scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme_minimal(base_size = 14) +
   labs(title = "TYPE A1 : Évolution du Coefficient d'Écoulement Global à l'Exutoire",
-       subtitle = "Vue Météo : Comparaison de l'efficacité des gestions pour un climat donné",
+       subtitle = "Vue Météo : Comparaison de l'efficacité des gestions pour un climat donné (Données brutes)",
        x = "Saison", y = "Coefficient d'Écoulement (%)", color = "Gestion", linetype = "Gestion") +
   theme(legend.position = "bottom", strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), strip.text = element_text(face = "bold"))
 print(gA1)
@@ -176,13 +176,13 @@ print(gA1)
 # -- TYPE A2 : Coef d'Evaporation --
 dev.new(width = 14, height = 8)
 gA2 <- ggplot(df_master, aes(x = Saison_Hydro, y = Coef_Evaporation, color = Scenario, linetype = Scenario)) +
-  geom_smooth(se = FALSE, span = 0.3, linewidth = 1.2) + 
+  geom_line(linewidth = 0.8, alpha = 0.9) + # LIGNE MODIFIÉE ICI
   facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
   scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme_minimal(base_size = 14) +
   labs(title = "TYPE A2 : Évolution du Coefficient d'Évaporation",
-       subtitle = "Vue Météo : Impact des assecs sur l'évaporation du réseau",
+       subtitle = "Vue Météo : Impact des assecs sur l'évaporation du réseau (Données brutes)",
        x = "Saison", y = "Coefficient d'Évaporation (%)", color = "Gestion", linetype = "Gestion") +
   theme(legend.position = "bottom", strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), strip.text = element_text(face = "bold"))
 print(gA2)
@@ -190,17 +190,16 @@ print(gA2)
 # -- TYPE A3 : Coef de Captage --
 dev.new(width = 14, height = 8)
 gA3 <- ggplot(df_master, aes(x = Saison_Hydro, y = Coef_Captage, color = Scenario, linetype = Scenario)) +
-  geom_smooth(se = FALSE, span = 0.3, linewidth = 1.2) + 
+  geom_line(linewidth = 0.8, alpha = 0.9) + # LIGNE MODIFIÉE ICI
   facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
   scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme_minimal(base_size = 14) +
   labs(title = "TYPE A3 : Évolution du Taux de Captage Global",
-       subtitle = "Vue Météo : Part de la pluie de tout le bassin captée par le réseau d'étangs",
+       subtitle = "Vue Météo : Part de la pluie de tout le bassin captée par le réseau d'étangs (Données brutes)",
        x = "Saison", y = "Taux de Captage (%)", color = "Gestion", linetype = "Gestion") +
   theme(legend.position = "bottom", strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), strip.text = element_text(face = "bold"))
 print(gA3)
-
 
 # ==============================================================================
 # 6. GÉNÉRATION DES GRAPHIQUES - TYPE B (Vue par Gestion)
@@ -209,13 +208,13 @@ print(gA3)
 # -- TYPE B1 : Coef d'Ecoulement --
 dev.new(width = 14, height = 8)
 gB1 <- ggplot(df_master, aes(x = Saison_Hydro, y = Coef_Ecoulement, color = Modele_Meteo_Desc)) +
-  geom_smooth(se = FALSE, span = 0.3, linewidth = 1.2) + 
+  geom_line(linewidth = 0.8, alpha = 0.9) + # LIGNE MODIFIÉE ICI
   facet_wrap(~ Scenario, ncol = 3) +
   scale_color_manual(values = couleurs_meteo) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme_minimal(base_size = 14) +
   labs(title = "TYPE B1 : Évolution du Coefficient d'Écoulement Global",
-       subtitle = "Vue Gestion : Éventail de l'incertitude climatique selon la stratégie choisie",
+       subtitle = "Vue Gestion : Éventail de l'incertitude climatique selon la stratégie choisie (Données brutes)",
        x = "Saison", y = "Coefficient d'Écoulement (%)", color = "Modèle Météo") +
   theme(legend.position = "bottom", strip.background = element_rect(fill = "#fcf3cf", color = "#f1c40f"), strip.text = element_text(face = "bold"))
 print(gB1)
@@ -223,13 +222,13 @@ print(gB1)
 # -- TYPE B2 : Coef d'Evaporation --
 dev.new(width = 14, height = 8)
 gB2 <- ggplot(df_master, aes(x = Saison_Hydro, y = Coef_Evaporation, color = Modele_Meteo_Desc)) +
-  geom_smooth(se = FALSE, span = 0.3, linewidth = 1.2) + 
+  geom_line(linewidth = 0.8, alpha = 0.9) + # LIGNE MODIFIÉE ICI
   facet_wrap(~ Scenario, ncol = 3) +
   scale_color_manual(values = couleurs_meteo) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme_minimal(base_size = 14) +
   labs(title = "TYPE B2 : Évolution du Coefficient d'Évaporation",
-       subtitle = "Vue Gestion : Vulnérabilité de l'évaporation face aux 6 futurs climatiques",
+       subtitle = "Vue Gestion : Vulnérabilité de l'évaporation face aux 6 futurs climatiques (Données brutes)",
        x = "Saison", y = "Coefficient d'Évaporation (%)", color = "Modèle Météo") +
   theme(legend.position = "bottom", strip.background = element_rect(fill = "#fcf3cf", color = "#f1c40f"), strip.text = element_text(face = "bold"))
 print(gB2)
@@ -237,17 +236,136 @@ print(gB2)
 # -- TYPE B3 : Coef de Captage --
 dev.new(width = 14, height = 8)
 gB3 <- ggplot(df_master, aes(x = Saison_Hydro, y = Coef_Captage, color = Modele_Meteo_Desc)) +
-  geom_smooth(se = FALSE, span = 0.3, linewidth = 1.2) + 
+  geom_line(linewidth = 0.8, alpha = 0.9) + # LIGNE MODIFIÉE ICI
   facet_wrap(~ Scenario, ncol = 3) +
   scale_color_manual(values = couleurs_meteo) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme_minimal(base_size = 14) +
   labs(title = "TYPE B3 : Évolution du Taux de Captage Global",
-       subtitle = "Vue Gestion : Dégradation de la ressource en eau selon la violence du climat",
+       subtitle = "Vue Gestion : Dégradation de la ressource en eau selon la violence du climat (Données brutes)",
        x = "Saison", y = "Taux de Captage (%)", color = "Modèle Météo") +
   theme(legend.position = "bottom", strip.background = element_rect(fill = "#fcf3cf", color = "#f1c40f"), strip.text = element_text(face = "bold"))
 print(gB3)
 
+
+
+
+# ==============================================================================
+# CALCUL DES TRAJECTOIRES CUMULÉES EN MILLIMÈTRES (LAME D'EAU)
+# ==============================================================================
+cat("Calcul des lames d'eau cumulées (mm)...\n")
+
+df_master_cum <- df_master %>%
+  # On trie chronologiquement pour que le cumul se fasse dans le bon ordre
+  arrange(Scenario, Modele_Meteo_Desc, Saison_Hydro) %>%
+  group_by(Scenario, Modele_Meteo_Desc) %>%
+  mutate(
+    # Astuce : On retrouve le facteur de conversion (Surface_ha * 10)
+    Facteur_Surface = Volume_Pluie_Total_BV_m3 / Pluie_Totale_mm,
+    
+    # 1. On cumule les volumes en m3 année après année
+    Cum_Exutoire_m3 = cumsum(Volume_Exutoire_m3),
+    Cum_Evap_m3     = cumsum(Volume_Evap_m3),
+    Cum_Captage_m3  = cumsum(Volume_Ruiss_m3 + Volume_Pluie_Directe_m3),
+    
+    # 2. On reconvertit ces cumuls géants en millimètres (mm)
+    Cum_Exutoire_mm = Cum_Exutoire_m3 / Facteur_Surface,
+    Cum_Evap_mm     = Cum_Evap_m3 / Facteur_Surface,
+    Cum_Captage_mm  = Cum_Captage_m3 / Facteur_Surface
+  ) %>%
+  ungroup()
+
+
+# ==============================================================================
+# 5. GÉNÉRATION DES GRAPHIQUES CUMULÉS (LAME D'EAU EN MM)
+# ==============================================================================
+
+# -- TYPE A1 : Cumul d'Écoulement à l'Exutoire (mm) --
+dev.new(width = 14, height = 8)
+gA1 <- ggplot(df_master_cum, aes(x = Saison_Hydro, y = Cum_Exutoire_mm, color = Scenario, linetype = Scenario)) +
+  geom_line(linewidth = 1, alpha = 0.9) + 
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
+  theme_minimal(base_size = 14) +
+  labs(title = "TYPE A1 : Lame d'Eau Cumulée Perdue à l'Exutoire (mm)",
+       subtitle = "Vue Météo : Équivalent en mm de pluie enfuie par la rivière depuis 2026",
+       x = "Saison", y = "Volume Écoulé Cumulé (mm)", color = "Gestion", linetype = "Gestion") +
+  theme(legend.position = "bottom", strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), strip.text = element_text(face = "bold"))
+print(gA1)
+
+# -- TYPE A2 : Cumul d'Évaporation (mm) --
+dev.new(width = 14, height = 8)
+gA2 <- ggplot(df_master_cum, aes(x = Saison_Hydro, y = Cum_Evap_mm, color = Scenario, linetype = Scenario)) +
+  geom_line(linewidth = 1, alpha = 0.9) + 
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
+  theme_minimal(base_size = 14) +
+  labs(title = "TYPE A2 : Lame d'Eau Cumulée Évaporée (mm)",
+       subtitle = "Vue Météo : Équivalent en mm de pluie détruite par le forçage thermique depuis 2026",
+       x = "Saison", y = "Évaporation Cumulée (mm)", color = "Gestion", linetype = "Gestion") +
+  theme(legend.position = "bottom", strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), strip.text = element_text(face = "bold"))
+print(gA2)
+
+# -- TYPE A3 : Cumul de Captage global (mm) --
+dev.new(width = 14, height = 8)
+gA3 <- ggplot(df_master_cum, aes(x = Saison_Hydro, y = Cum_Captage_mm, color = Scenario, linetype = Scenario)) +
+  geom_line(linewidth = 1, alpha = 0.9) + 
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
+  theme_minimal(base_size = 14) +
+  labs(title = "TYPE A3 : Lame d'Eau Cumulée Captée par le Réseau (mm)",
+       subtitle = "Vue Météo : Équivalent en mm de pluie retenue dans les étangs depuis 2026",
+       x = "Saison", y = "Captage Cumulé (mm)", color = "Gestion", linetype = "Gestion") +
+  theme(legend.position = "bottom", strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), strip.text = element_text(face = "bold"))
+print(gA3)
+
+
+
+
+
+# ==============================================================================
+# 6. GÉNÉRATION DES GRAPHIQUES CUMULÉS EN MM - TYPE B (Vue par Gestion)
+# ==============================================================================
+
+# -- TYPE B1 : Cumul d'Écoulement à l'Exutoire (mm) --
+dev.new(width = 14, height = 8)
+gB1 <- ggplot(df_master_cum, aes(x = Saison_Hydro, y = Cum_Exutoire_mm, color = Modele_Meteo_Desc)) +
+  geom_line(linewidth = 1, alpha = 0.9) + 
+  facet_wrap(~ Scenario, ncol = 3) +
+  scale_color_manual(values = couleurs_meteo) +
+  # Attention : On a retiré le format "pourcentage" ici
+  theme_minimal(base_size = 14) +
+  labs(title = "TYPE B1 : Lame d'Eau Cumulée Perdue à l'Exutoire (mm)",
+       subtitle = "Vue Gestion : Dispersion de la perte en eau face à l'incertitude climatique",
+       x = "Saison", y = "Volume Écoulé Cumulé (mm)", color = "Modèle Météo") +
+  theme(legend.position = "bottom", strip.background = element_rect(fill = "#fcf3cf", color = "#f1c40f"), strip.text = element_text(face = "bold"))
+print(gB1)
+
+# -- TYPE B2 : Cumul d'Évaporation (mm) --
+dev.new(width = 14, height = 8)
+gB2 <- ggplot(df_master_cum, aes(x = Saison_Hydro, y = Cum_Evap_mm, color = Modele_Meteo_Desc)) +
+  geom_line(linewidth = 1, alpha = 0.9) + 
+  facet_wrap(~ Scenario, ncol = 3) +
+  scale_color_manual(values = couleurs_meteo) +
+  theme_minimal(base_size = 14) +
+  labs(title = "TYPE B2 : Lame d'Eau Cumulée Évaporée (mm)",
+       subtitle = "Vue Gestion : Sensibilité de l'évaporation des étangs selon les 6 futurs DRIAS",
+       x = "Saison", y = "Évaporation Cumulée (mm)", color = "Modèle Météo") +
+  theme(legend.position = "bottom", strip.background = element_rect(fill = "#fcf3cf", color = "#f1c40f"), strip.text = element_text(face = "bold"))
+print(gB2)
+
+# -- TYPE B3 : Cumul de Captage global (mm) --
+dev.new(width = 14, height = 8)
+gB3 <- ggplot(df_master_cum, aes(x = Saison_Hydro, y = Cum_Captage_mm, color = Modele_Meteo_Desc)) +
+  geom_line(linewidth = 1, alpha = 0.9) + 
+  facet_wrap(~ Scenario, ncol = 3) +
+  scale_color_manual(values = couleurs_meteo) +
+  theme_minimal(base_size = 14) +
+  labs(title = "TYPE B3 : Lame d'Eau Cumulée Captée par le Réseau (mm)",
+       subtitle = "Vue Gestion : Impact du dérèglement climatique sur l'efficacité globale de remplissage",
+       x = "Saison", y = "Captage Cumulé (mm)", color = "Modèle Météo") +
+  theme(legend.position = "bottom", strip.background = element_rect(fill = "#fcf3cf", color = "#f1c40f"), strip.text = element_text(face = "bold"))
+print(gB3)
 
 
 
