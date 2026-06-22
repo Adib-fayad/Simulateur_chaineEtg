@@ -370,6 +370,258 @@ print(gB3)
 
 
 
+
+
+# ==============================================================================
+# 7. ANALYSE STATISTIQUE EN BOXPLOTS (DISTRIBUTION ANNUELLE 2026-2070)
+# ==============================================================================
+# ATTENTION : On utilise df_master (données annuelles) et non le cumul, 
+# pour visualiser la répartition des 44 années simulées.
+
+# -- BOXPLOT 1 : Coefficient d'Écoulement --
+dev.new(width = 15, height = 8)
+g_box_eco <- ggplot(df_master, aes(x = Scenario, y = Coef_Ecoulement, fill = Scenario)) +
+  geom_boxplot(alpha = 0.8, outlier.size = 1.2, outlier.alpha = 0.6) +
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_fill_manual(values = couleurs_scenarios) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal(base_size = 13) +
+  labs(
+    title = "Distribution Annuelle du Coefficient d'Écoulement Global (2026-2070)",
+    subtitle = "Chaque boîte représente la variabilité des 44 années. Les points sont les années extrêmes.",
+    x = "Stratégie de Gestion",
+    y = "Coef. d'Écoulement Annuel (%)"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+    legend.position = "none", # La légende est redondante avec l'axe X
+    strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"),
+    strip.text = element_text(face = "bold")
+  )
+print(g_box_eco)
+
+# -- BOXPLOT 2 : Coefficient d'Évaporation --
+dev.new(width = 15, height = 8)
+g_box_evap <- ggplot(df_master, aes(x = Scenario, y = Coef_Evaporation, fill = Scenario)) +
+  geom_boxplot(alpha = 0.8, outlier.size = 1.2, outlier.alpha = 0.6) +
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_fill_manual(values = couleurs_scenarios) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal(base_size = 13) +
+  labs(
+    title = "Distribution Annuelle du Coefficient d'Évaporation (2026-2070)",
+    subtitle = "Impact des stratégies de gestion sur la perte en eau annuelle",
+    x = "Stratégie de Gestion",
+    y = "Coef. d'Évaporation Annuel (%)"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+    legend.position = "none",
+    strip.background = element_rect(fill = "#fdf2e9", color = "#e67e22"), # Bandeau plus chaud
+    strip.text = element_text(face = "bold", color = "#2c3e50")
+  )
+print(g_box_evap)
+
+# -- BOXPLOT 3 : Taux de Captage --
+dev.new(width = 15, height = 8)
+g_box_capt <- ggplot(df_master, aes(x = Scenario, y = Coef_Captage, fill = Scenario)) +
+  geom_boxplot(alpha = 0.8, outlier.size = 1.2, outlier.alpha = 0.6) +
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_fill_manual(values = couleurs_scenarios) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal(base_size = 13) +
+  labs(
+    title = "Distribution Annuelle du Taux de Captage Global (2026-2070)",
+    subtitle = "Capacité du réseau à intercepter la pluie selon la rudesse de l'année",
+    x = "Stratégie de Gestion",
+    y = "Taux de Captage Annuel (%)"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),
+    legend.position = "none",
+    strip.background = element_rect(fill = "#eef7f0", color = "#2ecc71"), # Bandeau plus vert
+    strip.text = element_text(face = "bold", color = "#2c3e50")
+  )
+print(g_box_capt)
+
+
+
+
+
+
+
+
+
+
+
+# ==============================================================================
+# SCRIPT D'ANALYSE DE VULNÉRABILITÉ (AVEC INDICATEUR DE TRANSIT INTERNE)
+# ==============================================================================
+
+library(tidyverse)
+library(lubridate)
+library(stringr)
+
+# ------------------------------------------------------------------------------
+# 1. PARAMÉTRAGE DU SCRIPT ET DES DOSSIERS
+# ------------------------------------------------------------------------------
+dossiers_scenarios <- c(
+  "simulation futur/Chalamont_aleatoire/Grand_petit",
+  "simulation futur/Chalamont_aleatoire/pluriannuel_fixe",
+  "simulation futur/Chalamont_aleatoire/pluriannuel_variable",
+  "simulation futur/Chalamont_opti/Vidange",
+  "simulation futur/Chalamont_opti/Vidange_Assec"
+)
+
+noms_propres_scenarios <- c(
+  "Grand_petit" = "1. Aléatoire (Taille)",
+  "pluriannuel_fixe" = "2. Aléatoire (Fixe)",
+  "pluriannuel_variable" = "3. Aléatoire (Variable)",
+  "Vidange" = "4. Opti (Vidange seule)",
+  "Vidange_Assec" = "5. Opti (Synchronisation Totale)"
+)
+
+# ------------------------------------------------------------------------------
+# 2. MOTEUR DE CALCUL (4 INDICATEURS GLOBAUX)
+# ------------------------------------------------------------------------------
+calculer_indicateurs_annuels <- function(chemin_rds, nom_scenario, nom_modele) {
+  
+  simu <- readRDS(chemin_rds)
+  df_exutoire <- simu$exutoire_data
+  if(length(simu$liste_finale) == 0) return(NULL)
+  
+  # Surface
+  surface_totale_bv <- sum(sapply(simu$liste_finale, function(x) x$Surface_BV[1]), na.rm = TRUE)
+  surface_eau_totale <- sum(sapply(simu$liste_finale, function(x) x$SURFACE_eau[1]), na.rm = TRUE)
+  
+  # Fusion
+  df_all_etangs <- bind_rows(simu$liste_finale, .id = "NOM_ETANG") %>%
+    mutate(
+      annee = year(dat), mois = month(dat), jour = day(dat),
+      Saison_Hydro = if_else(mois > 10 | (mois == 10 & jour >= 15), annee + 1, annee)
+    )
+  
+  # Agrégation
+  df_daily_global <- df_all_etangs %>%
+    group_by(Saison_Hydro, dat) %>%
+    summarise(
+      RR_jour = first(RR),
+      Volume_Ruissellement_Tous_Etangs = sum(Volume_R, na.rm = TRUE),
+      Volume_Evap_Tous_Etangs = sum(abs(Evap_Reelle[Evap_Reelle < 0]), na.rm = TRUE),
+      # NOUVEAU : On somme l'eau reçue par les étangs avals (Transit interne)
+      Volume_Transit_Reseau_Jour = sum(Vamont, na.rm = TRUE), 
+      .groups = "drop"
+    ) %>%
+    left_join(df_exutoire %>% select(dat, Volume_Riviere), by = "dat")
+  
+  # Bilan Saison
+  bilan_global <- df_daily_global %>%
+    group_by(Saison_Hydro) %>%
+    summarise(
+      Pluie_Totale_mm = sum(RR_jour, na.rm = TRUE),
+      Volume_Pluie_Total_BV_m3 = Pluie_Totale_mm * surface_totale_bv * 10,
+      
+      Volume_Exutoire_m3 = sum(Volume_Riviere, na.rm = TRUE),
+      Volume_Evap_m3 = sum(Volume_Evap_Tous_Etangs, na.rm = TRUE),
+      Volume_Ruiss_m3 = sum(Volume_Ruissellement_Tous_Etangs, na.rm = TRUE),
+      Volume_Pluie_Directe_m3 = Pluie_Totale_mm * surface_eau_totale * 10,
+      
+      # NOUVEAU : Volume total ayant transité dans les canaux du réseau sur la saison
+      Volume_Transit_m3 = sum(Volume_Transit_Reseau_Jour, na.rm = TRUE),
+      
+      # Coefs Annuels (Pour d'éventuels boxplots plus tard)
+      Coef_Ecoulement = Volume_Exutoire_m3 / Volume_Pluie_Total_BV_m3,
+      Coef_Evaporation = Volume_Evap_m3 / Volume_Pluie_Total_BV_m3,
+      Coef_Captage = (Volume_Ruiss_m3 + Volume_Pluie_Directe_m3) / Volume_Pluie_Total_BV_m3,
+      
+      .groups = "drop"
+    ) %>%
+    filter(Saison_Hydro >= 2026 & Saison_Hydro <= 2070) %>%
+    mutate(Scenario = nom_scenario, Modele_Meteo = nom_modele)
+  
+  return(bilan_global)
+}
+
+# ------------------------------------------------------------------------------
+# 3. LE CRAWLER
+# ------------------------------------------------------------------------------
+cat("Extraction...\n")
+liste_df_resultats <- list()
+
+for (dossier in dossiers_scenarios) {
+  if (!dir.exists(dossier)) next
+  fichiers_rds <- list.files(dossier, pattern = "\\.rds$", full.names = TRUE)
+  nom_scenario_propre <- noms_propres_scenarios[basename(dossier)]
+  for (fichier in fichiers_rds) {
+    modele_extrait <- str_extract(basename(fichier), "(?<=Meteo_).*(?=_[0-9]{8}\\.rds)")
+    res <- calculer_indicateurs_annuels(fichier, nom_scenario_propre, ifelse(is.na(modele_extrait), "Inconnu", modele_extrait))
+    if (!is.null(res)) liste_df_resultats[[length(liste_df_resultats) + 1]] <- res
+  }
+}
+
+df_master <- bind_rows(liste_df_resultats) %>%
+  mutate(Modele_Meteo_Desc = case_when(
+    str_detect(Modele_Meteo, "ALADIN63") ~ "CNRM-CM5 ALADIN63\n(Modéré)",
+    str_detect(Modele_Meteo, "REMO2009") ~ "MPI-ESM REMO2009\n(Scénario intermédiaire)",
+    str_detect(Modele_Meteo, "WRF381P")  ~ "IPSL-CM5A WRF381P\n(Hiver très pluvieux, Été humide)",
+    str_detect(Modele_Meteo, "RCA4")     ~ "IPSL-CM5A RCA4\n(Hiver très humide, Été extrême)",
+    str_detect(Modele_Meteo, "RegCM4-6") ~ "HadGEM2 RegCM4-6\n(Très chaud, sécheresse modérée)",
+    str_detect(Modele_Meteo, "CCLM4-8-17") ~ "HadGEM2 CCLM4-8-17\n(Extrême : Le plus chaud/sec en été)",
+    TRUE ~ Modele_Meteo
+  ))
+
+# ------------------------------------------------------------------------------
+# 4. CALCUL DES LAMES D'EAU CUMULÉES (EN MM)
+# ------------------------------------------------------------------------------
+cat("Calcul des bilans cumulés (mm)...\n")
+
+df_master_cum <- df_master %>%
+  arrange(Scenario, Modele_Meteo_Desc, Saison_Hydro) %>%
+  group_by(Scenario, Modele_Meteo_Desc) %>%
+  mutate(
+    Facteur_Surface = Volume_Pluie_Total_BV_m3 / Pluie_Totale_mm,
+    
+    # Cumuls en m3
+    Cum_Exutoire_m3 = cumsum(Volume_Exutoire_m3),
+    Cum_Evap_m3     = cumsum(Volume_Evap_m3),
+    Cum_Captage_m3  = cumsum(Volume_Ruiss_m3 + Volume_Pluie_Directe_m3),
+    Cum_Transit_m3  = cumsum(Volume_Transit_m3), # NOUVEAU
+    
+    # Conversion en mm
+    Cum_Exutoire_mm = Cum_Exutoire_m3 / Facteur_Surface,
+    Cum_Evap_mm     = Cum_Evap_m3 / Facteur_Surface,
+    Cum_Captage_mm  = Cum_Captage_m3 / Facteur_Surface,
+    Cum_Transit_mm  = Cum_Transit_m3 / Facteur_Surface  # NOUVEAU
+  ) %>%
+  ungroup()
+
+# ==============================================================================
+# 5. PALETTES DE COULEURS
+# ==============================================================================
+couleurs_scenarios <- c("1. Aléatoire (Taille)" = "#e74c3c", "2. Aléatoire (Fixe)" = "#e67e22", "3. Aléatoire (Variable)" = "#f1c40f", "4. Opti (Vidange seule)" = "#3498db", "5. Opti (Synchronisation Totale)" = "#2ecc71")
+linetypes_scenarios <- c("1. Aléatoire (Taille)" = "solid", "2. Aléatoire (Fixe)" = "dashed", "3. Aléatoire (Variable)" = "dotted", "4. Opti (Vidange seule)" = "solid", "5. Opti (Synchronisation Totale)" = "dashed")
+
+# ==============================================================================
+# 6. GÉNÉRATION DES GRAPHIQUES DU NOUVEL INDICATEUR (LE TRANSIT INTERNE)
+# ==============================================================================
+
+# -- TYPE A4 : Transit Interne Cumulé (mm) --
+dev.new(width = 14, height = 8)
+gA4 <- ggplot(df_master_cum, aes(x = Saison_Hydro, y = Cum_Transit_mm, color = Scenario, linetype = Scenario)) +
+  geom_line(linewidth = 1, alpha = 0.9) + 
+  facet_wrap(~ Modele_Meteo_Desc, ncol = 3) +
+  scale_color_manual(values = couleurs_scenarios) + scale_linetype_manual(values = linetypes_scenarios) +
+  theme_minimal(base_size = 14) +
+  labs(title = "TYPE A4 : Dynamique du Transit Interne (Effet d'entraînement du réseau)",
+       subtitle = "Vue Météo : Lame d'eau cumulée ayant voyagé d'un étang à l'autre (hors exutoire terminal)",
+       x = "Saison", y = "Transit Inter-Étangs Cumulé (mm)", color = "Gestion", linetype = "Gestion") +
+  theme(legend.position = "bottom", strip.background = element_rect(fill = "#e8f4f8", color = "#b6d4fe"), strip.text = element_text(face = "bold"))
+print(gA4)
+
+# -- TYPE B4 : Transit Interne Cumulé (Vue Gestion) --
+# (Code identique à adapter avec tes couleurs météo si tu souhaites faire le Type B pour cet indicateur)
+
+
 # ==============================================================================
 # ANALYSE DE VULNÉRABILITÉ : CLASSIFICATION AUTOMATIQUE & REMPLISSAGE AU 15/02
 # ==============================================================================
