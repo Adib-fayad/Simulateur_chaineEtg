@@ -812,3 +812,89 @@ g6 <- ggplot(df_decennie_ete, aes(x = Decennie, y = T_MAX, fill = Decennie)) +
     strip.text = element_text(face = "bold", color = "#78281f")
   )
 print(g6)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ==============================================================================
+# 8. PLOT MÉTÉO 7 : DIAGRAMMES OMBROTHERMIQUES (Bagnouls et Gaussen)
+# ==============================================================================
+
+# 1. On agresse d'abord au mois réel pour chaque année (Somme de pluie, Moyenne de T)
+df_mensuel <- df_climat %>%
+  mutate(Periode = if_else(Annee <= 2045, "1. Horizon Proche (2026-2045)", "2. Horizon Lointain (2050-2070)")) %>%
+  group_by(Periode, Modele_Desc, Annee, Mois) %>%
+  summarise(
+    RR_Mensuel = sum(RR, na.rm = TRUE),
+    T_Mensuel = mean(T_MOY, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# 2. On fait la moyenne de ces mois sur toute la période
+df_ombro <- df_mensuel %>%
+  group_by(Periode, Modele_Desc, Mois) %>%
+  summarise(
+    RR_Moyen = mean(RR_Mensuel, na.rm = TRUE),
+    T_Moyen = mean(T_Mensuel, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+coeff_ombro <- 2 # Règle d'or de Bagnouls-Gaussen : P = 2T
+
+dev.new(width = 16, height = 9)
+g7 <- ggplot(df_ombro, aes(x = Mois)) +
+  # Remplissage Bleu : Zone Humide (Pluie > 2x Température)
+  geom_ribbon(aes(ymin = T_Moyen * coeff_ombro, ymax = pmax(RR_Moyen, T_Moyen * coeff_ombro)), fill = "#3498db", alpha = 0.3) +
+  # Remplissage Rouge : Zone de Sécheresse (Pluie < 2x Température)
+  geom_ribbon(aes(ymin = pmin(RR_Moyen, T_Moyen * coeff_ombro), ymax = T_Moyen * coeff_ombro), fill = "#e74c3c", alpha = 0.4) +
+  
+  # Courbes principales
+  geom_line(aes(y = RR_Moyen, color = "Pluie (P)"), linewidth = 1.2) +
+  geom_line(aes(y = T_Moyen * coeff_ombro, color = "Température (T)"), linewidth = 1.2) +
+  
+  # Grille croisée : Modèle vs Période
+  facet_grid(Periode ~ Modele_Desc) +
+  
+  scale_color_manual(values = c("Pluie (P)" = "#2980b9", "Température (T)" = "#c0392b")) +
+  scale_x_continuous(breaks = 1:12, labels = c("J","F","M","A","M","J","J","A","S","O","N","D")) +
+  
+  # Double Axe Y mathématique
+  scale_y_continuous(
+    name = "Précipitations (mm)",
+    sec.axis = sec_axis(~ . / coeff_ombro, name = "Température (°C)")
+  ) +
+  
+  theme_minimal(base_size = 13) +
+  labs(
+    title = "MÉTÉO 7 : Diagrammes Ombrothermiques (Indice d'Aridité)",
+    subtitle = "La zone rouge illustre les mois de déficit hydrique (P < 2T). Observez son élargissement à l'horizon 2070.",
+    x = "Mois de l'année", color = "Données :"
+  ) +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "#ecf0f1", color = "#bdc3c7"),
+    strip.text = element_text(face = "bold"),
+    axis.title.y.right = element_text(color = "#c0392b", face = "bold"),
+    axis.title.y.left = element_text(color = "#2980b9", face = "bold")
+  )
+
+print(g7)
+
