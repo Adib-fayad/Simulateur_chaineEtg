@@ -176,8 +176,9 @@ dev.new(width = 12, height = 6)
 # ------------------------------------------------------------------------------
 nom_etang <- "CORVEYZIEUX" 
 annee_debut <- 2024 
+"Resultats_MonteCarlo_RDS/CHALAMONT_ISOLE/Simu_Isole_Base_1.rds"
 
-chemin_fichier_opti <- "Banque_Simulations_Globales/Simu_INRAE_Beta4_RU200_Coef0.20.rds"
+chemin_fichier_opti <- file.path(DOSSIER_RDS, "Simu_Base.rds")
 
 # ------------------------------------------------------------------------------
 # 2. CHARGEMENT ET DÉTECTION DE LA PÉRIODE DE GESTION
@@ -299,4 +300,17 @@ graphique_final <- g_entrees + g_sorties +
   )
 
 print(graphique_final)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
