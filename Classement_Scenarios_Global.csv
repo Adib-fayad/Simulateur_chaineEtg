@@ -1,0 +1,9 @@
+Scenario,Nb_Etangs_Valides,Biais_Moyen_Global,Erreur_Absolue_Moyenne
+L0.05_Pant10_CN_modif_20260519.rds,10,-17.66,19.11
+L0.2_Pant10_CN_modif_20260519.rds,10,-18.39,19.96
+L0.05_Pant5_CN_modif_20260519.rds,10,-19.25,20.29
+L0.05_Pant10_CN_base_20260519.rds,10,-20.53,20.77
+L0.2_Pant5_CN_modif_20260519.rds,10,-19.76,20.85
+L0.05_Pant5_CN_base_20260519.rds,10,-21.67,21.67
+L0.2_Pant10_CN_base_20260519.rds,10,-22.33,22.33
+L0.2_Pant5_CN_base_20260519.rds,10,-22.94,22.94
